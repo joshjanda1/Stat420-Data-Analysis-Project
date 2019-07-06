@@ -1,0 +1,17 @@
+---
+title: "Data Analysis"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+
+loan_data = read_csv("loan_data.csv", skip = 1)
+noncurrent_loan_data = loan_data[loan_data$loan_status != "Current", ]#want loans that are not current to assess risk
+```
+```{r}
+
+noncurrent_loan_data$loan_status[1:100]
+
+```
+
