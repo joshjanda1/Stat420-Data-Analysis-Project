@@ -1,0 +1,110 @@
+---
+title: "Data Analysis Project Proposal"
+author: "Aaron Blythe, ablythe; Josh Janda: joshlj2; Jeanette Pettibone, jgp4"
+date: "7/6/2019"
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+
+---
+
+# Predicting Housing Prices
+
+## Introduction
+
+The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about houses within a particular block.
+
+## Dataset
+
+We're using the California Housing Prices dataset from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.  
+
+We loaded `housing.csv` into R.
+
+```{r}
+library(readr)
+housing_data = read_csv("housing.csv")
+```
+
+The dataset contains 20640 observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.  
+
+- longitude: A measure of how far west a house is; a higher value is farther west
+- latitude: A measure of how far north a house is; a higher value is farther north
+- housingMedianAge: Median age of a house within a block; a lower number is a newer building
+- totalRooms: Total number of rooms within a block
+- totalBedrooms: Total number of bedrooms within a block
+- population: Total number of people residing within a block
+- households: Total number of households, a group of people residing within a home unit, for a block
+- medianIncome: Median income for households within a block of houses (measured in tens of thousands of US Dollars)
+- oceanProximity: Location of the house w.r.t ocean/sea
+- medianHouseValue: Median house value for households within a block (measured in US Dollars)
+
+Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `oceanProximity` from text-based to a factor variable.  
+
+```{r}
+housing_data$ocean_proximity = as.factor(housing_data$ocean_proximity)
+ocean_proximity = housing_data$ocean_proximity
+```
+
+We see that the factor variable `oceanProximity` has the following $`r length(levels(ocean_proximity))`$ levels: $`r levels(ocean_proximity)`$.
+
+The other thing to consider is missing data.
+
+```{r}
+sum(is.na(housing_data))
+total_bedrooms = housing_data$total_bedrooms
+sum(is.na(total_bedrooms))
+```
+
+There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision.
+
+```{r}
+plot(housing_data$total_bedrooms ~ housing_data$total_rooms)
+```
+
+Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
+
+```{r}
+library(tidyverse)
+housing_data %>% 
+  group_by(total_rooms) %>% 
+  summarize(median.total_bedrooms = median(total_bedrooms, na.rm = TRUE))
+```
+
+Looking at the structure of the dataset after this clean up, we see that besides the one factor variable `ocean_proximity`, we are left with nine numeric variables, three of which are continuous (`longitude`, `latitude`, and `median_income`) and six of which are discrete (`housing_median_age`, `total_rooms`, `total_bedrooms`, `population`, `households`, and `median_house_value`).
+
+```{r}
+str(housing_data)
+```
+
+Let's look a bit more closely at the distribution of the numeric variables.
+
+```{r, fig.height=10, fig.width=14}
+par(mfrow = c(3, 3))
+hist(housing_data$longitude, breaks = 20, main = "longitude")
+hist(housing_data$latitude, breaks = 20, main = "latitude")
+hist(housing_data$housing_median_age, breaks = 20, main = "housing_median_age")
+hist(housing_data$total_rooms, breaks = 20, main = "total_rooms")
+hist(housing_data$total_bedrooms, breaks = 20, main = "total_bedrooms")
+hist(housing_data$population, breaks = 20, main = "population")
+hist(housing_data$households, breaks = 20, main = "households")
+hist(housing_data$median_income, breaks = 20, main = "median_income")
+hist(housing_data$median_house_value, breaks = 20, main = "median_house_value")
+```
+
+
+## Team Members
+
+The participants in this team project include:
+
+- Aaron Blythe, ablythe
+- Josh Janda, joshlj2
+- Jeanette Pettibone, jgp4
+
+
+
+
+
+
+
