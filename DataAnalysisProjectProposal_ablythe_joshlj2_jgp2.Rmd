@@ -65,7 +65,7 @@ plot(housing_data$total_bedrooms ~ housing_data$total_rooms)
 
 Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 housing_data %>% 
   group_by(total_rooms) %>% 
@@ -93,6 +93,11 @@ hist(housing_data$median_income, breaks = 20, main = "median_income")
 hist(housing_data$median_house_value, breaks = 20, main = "median_house_value")
 ```
 
+And let's look at the relationships between all the possible variables.
+
+```{r}
+pairs(housing_data)
+```
 
 ## Team Members
 
