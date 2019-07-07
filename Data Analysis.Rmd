@@ -1,17 +1,65 @@
 ---
-title: "Data Analysis"
+title: "Data Anlysis"
 output: html_document
 ---
 
-```{r message=FALSE, warning=FALSE}
+```{r}
 library(readr)
+library(knitr)
+library(caret)
 
-loan_data = read_csv("loan_data.csv", skip = 1)
-noncurrent_loan_data = loan_data[loan_data$loan_status != "Current", ]#want loans that are not current to assess risk
+housing_data = read_csv("housing.csv")#first line of housing 
+housing_data$median_house_value[1:100]
+
 ```
 ```{r}
+summary(housing_data)#gives us a summary of each column. Note that total bedrooms has 207 NA's. We will need to impute these values
+```
+```{r}
+library(ggplot2)
+#we want to look at shape of distribution to get a good idea of what to impute
+ggplot(housing_data, aes(x = total_bedrooms)) +
+  geom_histogram(bins = 40) +
+  xlab("Total Bedrooms") +
+  ylab("Density") +
+  ggtitle("Histogram of Total Bedrooms (noncontinuous variable)")
+#using mean for now
+```
+```{r}
+library(mice)
 
-noncurrent_loan_data$loan_status[1:100]
+housing_data_temp = mice(data = housing_data, m = 5, method = "mean", seed = 420)
+housing_data_full  = complete(housing_data_temp, 1)
+```
 
+
+```{r}
+housing_data_nc = housing_data_full[, -10]#remove text variable for now
+
+corrmatrix = cor(housing_data_nc)
+
+kable(t(corrmatrix))
+
+highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
+```
+
+```{r}
+library(scales)
+library(RColorBrewer)
+library(plotly)
+
+plot_map = ggplot(housing_data_full, 
+                  aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
+                      tr = total_rooms, tb = total_bedrooms, hh = households, mi = median_income)) +
+              geom_point(aes(size = population), alpha = 0.4) +
+              xlab("Longitude") +
+              ylab("Latitude") +
+              ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              scale_color_distiller(palette = "Paired", labels = comma) +
+              labs(color = "Median House Value (in $USD)", size = "Population")
+plot_map_tt = ggplotly(plot_map)
+
+plot_map_tt
 ```
 
