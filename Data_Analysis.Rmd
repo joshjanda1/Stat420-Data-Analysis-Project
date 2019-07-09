@@ -74,3 +74,26 @@ back_bic_mod = step(start_mod, direction = "backward", k = log(n))
 summary(back_bic_mod)
 ```
 
+
+
+```{r echo=TRUE}
+#lets use Weighted Least Squares on this model to cover potential heteroskedasticity.
+
+back_bic_mod_fitted = fitted(back_bic_mod)
+back_bic_mod_resid = resid(back_bic_mod)
+
+temp_wls_mod = lm(log(back_bic_mod_resid^2) ~ back_bic_mod_fitted + back_bic_mod_fitted^2)
+ghat = fitted(temp_wls_mod)
+hhat = exp(ghat)
+
+WLS_back_bic_mod = update(back_bic_mod, weights = 1 / hhat)# to do: #figure out how to get call
+
+plot(
+      back_bic_mod$fitted.values,
+      back_bic_mod$residuals
+)
+plot(
+      WLS_back_bic_mod$fitted.values,
+      WLS_back_bic_mod$residuals
+)
+```
