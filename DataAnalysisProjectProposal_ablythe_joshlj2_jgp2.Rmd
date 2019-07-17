@@ -16,6 +16,8 @@ urlcolor: cyan
 
 The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about houses within a particular block.
 
+The personal motivation of the members of the team include group publishing the work for this project publicly on the Kaggle website as a Kernel to exhibit what we have learned in the class.
+
 ## Dataset
 
 We're using the California Housing Prices dataset from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.  
@@ -40,6 +42,13 @@ The dataset contains 20640 observations and 10 attributes (9 predictors and 1 re
 - oceanProximity: Location of the house w.r.t ocean/sea
 - medianHouseValue: Median house value for households within a block (measured in US Dollars)
 
+This dataset meets all of the stated criteria for the project including:
+
+* A minimum 200 observations
+* A numeric response variable - `median_house_value`
+* At least one categorical predictor- `oceanProximity`
+* At least two numeric predictors - the remaining attributes 
+
 Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `oceanProximity` from text-based to a factor variable.  
 
 ```{r}
@@ -60,7 +69,7 @@ sum(is.na(total_bedrooms))
 There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision.
 
 ```{r}
-plot(housing_data$total_bedrooms ~ housing_data$total_rooms)
+plot(housing_data$total_bedrooms ~ housing_data$total_rooms, col="dodgerblue")
 ```
 
 Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
@@ -82,22 +91,30 @@ Let's look a bit more closely at the distribution of the numeric variables.
 
 ```{r, fig.height=10, fig.width=14}
 par(mfrow = c(3, 3))
-hist(housing_data$longitude, breaks = 20, main = "longitude")
-hist(housing_data$latitude, breaks = 20, main = "latitude")
-hist(housing_data$housing_median_age, breaks = 20, main = "housing_median_age")
-hist(housing_data$total_rooms, breaks = 20, main = "total_rooms")
-hist(housing_data$total_bedrooms, breaks = 20, main = "total_bedrooms")
-hist(housing_data$population, breaks = 20, main = "population")
-hist(housing_data$households, breaks = 20, main = "households")
-hist(housing_data$median_income, breaks = 20, main = "median_income")
-hist(housing_data$median_house_value, breaks = 20, main = "median_house_value")
+hist(housing_data$longitude, breaks = 20, main = "longitude", border="darkorange", col="dodgerblue")
+hist(housing_data$latitude, breaks = 20, main = "latitude", border="darkorange", col="dodgerblue")
+hist(housing_data$housing_median_age, breaks = 20, main = "housing_median_age", border="darkorange", col="dodgerblue")
+hist(housing_data$total_rooms, breaks = 20, main = "total_rooms", border="darkorange", col="dodgerblue")
+hist(housing_data$total_bedrooms, breaks = 20, main = "total_bedrooms", border="darkorange", col="dodgerblue")
+hist(housing_data$population, breaks = 20, main = "population", border="darkorange", col="dodgerblue")
+hist(housing_data$households, breaks = 20, main = "households", border="darkorange", col="dodgerblue")
+hist(housing_data$median_income, breaks = 20, main = "median_income", border="darkorange", col="dodgerblue")
+hist(housing_data$median_house_value, breaks = 20, main = "median_house_value", border="darkorange", col="dodgerblue")
 ```
 
 And let's look at the relationships between all the possible variables.
 
 ```{r}
-pairs(housing_data)
+pairs(housing_data, col = "dodgerblue")
 ```
+
+In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential coliearity of households and total bedrooms (and potentially total rooms).
+
+## Intended Methodology
+
+We intend to use this dataset to show prediction. So will split the data into a train data set and a test data set. The train dataset will be used to create the model. The test data set will be used to evaluate how well the model predicts the response variable of `median_house_value` given the predictors.
+
+Many different models will be trained and compared based on the the misclassifcation rate on the unseen (test) data set. 
 
 ## Team Members
 
