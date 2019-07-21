@@ -1,5 +1,5 @@
 ---
-title: "Data Analysis Project Proposal"
+title: "Predicting Housing Prices - Data Analysis Project Proposal"
 author: "Aaron Blythe, ablythe; Josh Janda: joshlj2; Jeanette Pettibone, jgp4"
 date: "7/6/2019"
 output:
