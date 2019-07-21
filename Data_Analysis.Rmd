@@ -61,16 +61,23 @@ plot_map = ggplot(housing_data_full,
               labs(color = "Median House Value (in $USD)", size = "Population")
 plot_map_tt = ggplotly(plot_map)
 
-plot_map_tt
+#plot_map_tt
 ```
 
 ```{r}
 temp_housing_data = housing_data_full[housing_data_full$ocean_proximity != "ISLAND", ] #possibly consider removing #ISLAND promiximity homes. There are 5 in the dataset out of 20k observations.
+set.seed(420)
+train_index = createDataPartition(temp_housing_data$ocean_proximity, p = .70, list = FALSE)
 
-start_mod = lm(median_house_value ~ (.)^2, data = temp_housing_data)
+housing_train = temp_housing_data[train_index,]
+housing_test = temp_housing_data[-train_index,]
+```
+
+```{r}
+start_mod = lm(median_house_value ~ (.)^2, data = housing_train)
  
 n = length(resid(start_mod))
-back_bic_mod = step(start_mod, direction = "backward", k = log(n))
+back_bic_mod = step(start_mod, direction = "backward", k = log(n), trace = FALSE)
 summary(back_bic_mod)
 ```
 
@@ -97,3 +104,29 @@ plot(
       WLS_back_bic_mod$residuals
 )
 ```
+```{r}
+rmse = function(predicted, actual) {
+  sqrt(sum((predicted - actual)^2) / length(actual))
+}
+```
+```{r}
+rmse_train_norm = rmse(back_bic_mod$fitted.values, housing_train$median_house_value)
+rmse_train_wls = rmse(WLS_back_bic_mod$fitted.values, housing_train$median_house_value)
+
+predicted_norm = predict(back_bic_mod, housing_test)
+predicted_wls = predict(WLS_back_bic_mod, housing_test)
+
+rmse_test_norm = rmse(predicted_norm, housing_test$median_house_value)
+rmse_test_wls = rmse(predicted_wls, housing_test$median_house_value)
+
+
+rmse_results = data.frame(
+                          "Normal Model" = c(rmse_train_norm, rmse_test_norm),
+                          "WLS Model" = c(rmse_train_wls, rmse_test_wls)
+                          )
+
+kable(t(rmse_results), col.names = c("Train RMSE", "Test RMSE"))
+##We can see here that WLS is garbage. Throw it away and pretend I never included it
+
+```
+
