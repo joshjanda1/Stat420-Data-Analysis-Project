@@ -12,6 +12,19 @@ urlcolor: cyan
 Installation note: You may need to install Cairo on your operating system to run this notebook. See README for details.
 ```{r}
 if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
+library(readr)
+library(ggplot2)
+library(knitr)
+library(tidyverse)
+library(caret)
+library(leaps)
+library(car)
+library(mice)
+library(scales)
+library(RColorBrewer)
+library(plotly)
 ```
 
 # Introduction
@@ -126,7 +139,8 @@ pairs(housing_data, col = "dodgerblue")
 
 In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential coliearity of households and total bedrooms (and potentially total rooms).
 
-# Methods
+
+TODO: Josh find the right place for this section
 
 ```{r cache=TRUE}
 library(ggplot2)
@@ -139,7 +153,7 @@ ggplot(housing_data, aes(x = total_bedrooms)) +
 #using mean for now
 ```
 
-
+TODO: Josh find the right place for this section
 
 ```{r}
 library(mice)
@@ -149,6 +163,7 @@ housing_data_full  = complete(housing_data_temp, 1)
 housing_data_full$ocean_proximity = as.factor(housing_data_full$ocean_proximity)
 ```
 
+TODO: Josh find the right place for this section
 
 ```{r}
 housing_data_nc = housing_data_full[, -10]#remove text variable for now
@@ -160,10 +175,226 @@ kable(t(corrmatrix))
 highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
+# Methods
+
+First we want to split the data into training and testing data. We will use an 80/20 split of a randomized sample. We will use a set seed to get repeatability.
+
+```{r}
+set.seed(420)
+housing_data_idx  = sample(nrow(housing_data), size = trunc(0.80 * nrow(housing_data)))
+housing_trn_data = housing_data[housing_data_idx, ]
+housing_tst_data = housing_data[-housing_data_idx, ]
+```
+
+We will set the test data aside for now and work with the training data to start.
+
+As a starting point we want to get an idea which parameters are good ones to use in a potential model. 
+
+We can use leaps to tell us the "best" model - the one with the lowest Adjusted R^2 for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
+
+```{r}
+regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^2,
+               data = housing_trn_data,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = 10,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
+# The output of this is long and not very pretty, there is better output below.
+#regsubsets2.out
+
+summary.out = summary(regsubsets.out)
+dont_print_df = as.data.frame(summary.out$outmat)
+## Adjusted R2
+plot(regsubsets.out, scale = "adjr2", main = "Adjusted R^2")
+
+#layout(matrix(1:2, ncol = 2))
+## Adjusted R2
+res.legend = subsets(regsubsets.out, statistic="adjr2", legend = FALSE, min.size = 5, main = "Adjusted R^2")
+## Mallow Cp - A small value of Cp means that the model is relatively precise
+#res.legend = subsets(regsubsets2.out, statistic="cp", legend = FALSE, min.size = 5, main = "Mallow Cp")
+abline(a = 1, b = 1, lty = 2)
+res.legend
+
+which.max(summary.out$adjr2)
+summary.out$which[which.max(summary.out$adjr2),]
+```
+
+From this information we now start constructing 3 models that scored an adjusted R^2 of 0.66 to work with going forward:
+
+```{r}
+best_leaps_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
+summary(best_leaps_model_1)
+```
+
+This is an interesting set of variables and makes a lot of sense. Housing prices are likely tied to the big cites (San Francisco, Los Angeles, etc.). A couple of ways to denote these are latitude, longitude and whether the location is near a Bay. Median Income may also be a proxy for the larger cities versus the more rural areas.
+
+There is a second model that is tied with the first at an Adjusted R^2 of 0.66. To extract this model we are using the graph of the Adjusted R^2 to get the parameters from the second row from the top. There are similarities, but a couple differences here.
+
+```{r}
+best_leaps_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_leaps_model_2)
+```
+
+There is also a model that scored an adjusted R^2 of 0.65.
+
+```{r}
+best_leaps_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_leaps_model_3)
+```
+
+```{r}
+extractAIC(best_leaps_model_1)
+extractAIC(best_leaps_model_2)
+extractAIC(best_leaps_model_3)
+```
+
+TODO: in addition to these 3 models, the model that Josh created initially should be integrated here.
+
+
+All 3 of these models are good candidates for forward and backward AIC and BIC
+
+```{r}
+
+back_aic_mod_1 = step(best_leaps_model_1, direction = "backward", trace = 0)
+back_aic_mod_2 = step(best_leaps_model_2, direction = "backward", trace = 0)
+back_aic_mod_3 = step(best_leaps_model_3, direction = "backward", trace = 0)
+
+len = length(best_leaps_model_1)
+back_bic_mod_1 = step(best_leaps_model_1, direction = "backward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+back_bic_mod_2 = step(best_leaps_model_2, direction = "backward", k = log(len), trace = 0)
+len = length(best_leaps_model_3)
+back_bic_mod_3 = step(best_leaps_model_3, direction = "backward", k = log(len), trace = 0)
+
+forward_aic_mod_1 = step(best_leaps_model_1, direction = "forward", trace = 0)
+forward_aic_mod_2 = step(best_leaps_model_2, direction = "forward", trace = 0)
+forward_aic_mod_3 = step(best_leaps_model_3, direction = "forward", trace = 0)
+
+len = length(best_leaps_model_1)
+forward_bic_mod_1 = step(best_leaps_model_1, direction = "forward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+forward_bic_mod_2 = step(best_leaps_model_2, direction = "forward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+forward_bic_mod_3 = step(best_leaps_model_2, direction = "forward", k = log(len), trace = 0)
+```
+
+```{r}
+extractAIC(back_aic_mod_1)
+extractAIC(back_aic_mod_2)
+extractAIC(back_aic_mod_3)
+
+extractAIC(back_bic_mod_1)
+extractAIC(back_bic_mod_2)
+extractAIC(back_bic_mod_3)
+
+extractAIC(forward_aic_mod_1)
+extractAIC(forward_aic_mod_2)
+extractAIC(forward_aic_mod_3)
+
+extractAIC(forward_bic_mod_1)
+extractAIC(forward_bic_mod_2)
+extractAIC(forward_bic_mod_3)
+```
+
+The models that we started with from leaps did not improve a whole lot. In most cases they are the same, however we did find that `back_aic_mod_2` and `back_bic_mod_2` slightly improved over `best_leaps_model_2`.
+
+The Extract AIC will tell us the number of parameters and the resulting AIC.
+"Smaller" models are better with regard to the number of parameters and the we want an lower overall resulting AIC.
+
+We now have the three models `best_leaps_model_1`, `back_aic_mod_2` and `best_leaps_model_3` to test going forward. Let's check the assumptions on these three models.
+
+TODO: update the diagnostic function, as it is currently just the one from the homework (with change to limit to 5000 to make it work for this dataset)
+
+```{r}
+diagnostics = function(model, pcol = 'grey', lcol = 'dodgerblue', alpha = 0.05, plotit = TRUE, testit = TRUE) {
+  if(plotit == TRUE){
+    # Two plots, side-by-side
+    par(mfrow = c(1, 2))
+    # A fitted versus residuals plot
+    plot(fitted(model), resid(model), col = pcol, pch = 20, cex = 2, xlab = "Fitted", ylab = "Residuals", main = "Fitted vs. Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    
+    # A Normal Q-Q plot of the residuals
+    qqnorm(resid(model), col = pcol, pch = 20, cex = 2, main = "Normal Q-Q Plot")
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if(testit == TRUE){
+    # NOTE: the shapiro test is limited to the first 5000 records
+    # See: https://stackoverflow.com/questions/28217306/error-in-shapiro-test-sample-size-must-be-between
+    p_val = shapiro.test(resid(model)[0:5000])$p.value
+    decision = ifelse(p_val < alpha, "Reject", "Fail to Reject")
+    list(p_val = p_val, decision = decision)
+  }
+}
+```
+
+
+```{r}
+diagnostics(best_leaps_model_1)
+diagnostics(back_aic_mod_2)
+diagnostics(best_leaps_model_3)
+```
+
+TODO: discuss the output of the diagnostics plot.
+
+## Detect Overfitting
+
+```{r}
+# From the text: http://daviddalpiaz.github.io/appliedstats/variable-selection-and-model-building.html
+calc_loocv_rmse = function(model) {
+  sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
+}
+```
+
+```{r}
+calc_loocv_rmse(best_leaps_model_1)
+calc_loocv_rmse(back_aic_mod_2)
+calc_loocv_rmse(best_leaps_model_3)
+```
+
+Model 1 has the lowest loocv_rmse.
+
+## Compare models with ANova
+
+```{r}
+anova(best_leaps_model_1, back_aic_mod_2)
+anova(best_leaps_model_1, best_leaps_model_3)
+anova(back_aic_mod_2, best_leaps_model_3)
+```
+
+TODO: discuss comparison of models.
+
+# Results
+
+## Make predictions
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(best_leaps_model_1, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(back_aic_mod_2, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(best_leaps_model_3, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+Each of the models have percent error of around 28%.
+
+# Discussion
+
 ```{r}
 library(scales)
 library(RColorBrewer)
 library(plotly)
+```
+TODO: put this back in, pulling for now since it makes things not loa
 
 plot_map = ggplot(housing_data_full, 
                   aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
@@ -178,7 +409,14 @@ plot_map = ggplot(housing_data_full,
 plot_map_tt = ggplotly(plot_map)
 
 plot_map_tt
-```
+
+TODO: discussion of the rad map and the hot spots by the coast and the Bay's
+TODO: is the "Near Bay" mean only San Fran or are there other Bay's?
+
+
+
+
+TODO: these are likely better plots than what I stubbed in above, so they likely should be integrated in the right place.
 
 ```{r}
 temp_housing_data = housing_data_full[housing_data_full$ocean_proximity != "ISLAND", ] #possibly consider removing #ISLAND promiximity homes. There are 5 in the dataset out of 20k observations.
