@@ -95,7 +95,27 @@ total_bedrooms = housing_data$total_bedrooms
 sum(is.na(total_bedrooms))
 ```
 
-There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision.
+There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision. One thing we can do to solve this issue of NA values in this variable is to impute data points. To impute data points, we will first want to take a look at the distribution of this variable to see which imputation method will work best.
+
+```{r cache=TRUE}
+bedroom_mean = mean(housing_data$total_bedrooms, na.rm=TRUE)
+bedroom_median = median(housing_data$total_bedrooms, na.rm=TRUE)
+ggplot(housing_data, aes(x = total_bedrooms)) +
+  geom_histogram(bins = 40, color = "orange", fill = "blue") +
+  geom_vline(aes(xintercept = bedroom_mean, color = "Mean"), lwd = 1.5) +
+  geom_vline(aes(xintercept = bedroom_median, color = "Median"), lwd = 1.5) +
+  xlab("Total Bedrooms") +
+  ylab("Frequency") +
+  ggtitle("Histogram of Total Bedrooms (noncontinuous variable)") +
+  scale_color_manual(name = "Summary Stats", labels = c("Mean", "Median"), values = c("red", "purple"))
+```
+
+Looking at the histogram above, we can see that the best imputation method is going to be the median of the total bedrooms variable.
+
+```{r}
+housing_data$total_bedrooms[is.na(housing_data$total_bedrooms)] = bedroom_median
+```
+
 
 ```{r}
 plot(housing_data$total_bedrooms ~ housing_data$total_rooms, col="dodgerblue")
@@ -137,36 +157,13 @@ And let's look at the relationships between all the possible variables.
 pairs(housing_data, col = "dodgerblue")
 ```
 
-In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential coliearity of households and total bedrooms (and potentially total rooms).
-
-
-TODO: Josh find the right place for this section
-
-```{r cache=TRUE}
-library(ggplot2)
-#we want to look at shape of distribution to get a good idea of what to impute
-ggplot(housing_data, aes(x = total_bedrooms)) +
-  geom_histogram(bins = 40) +
-  xlab("Total Bedrooms") +
-  ylab("Density") +
-  ggtitle("Histogram of Total Bedrooms (noncontinuous variable)")
-#using mean for now
-```
+In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential colinearity of households and total bedrooms (and potentially total rooms).
+^^Review and remove
 
 TODO: Josh find the right place for this section
-
+Let's keep this at the end since this will lead into our methods as we are looking at correlation.
 ```{r}
-library(mice)
-
-housing_data_temp = mice(data = housing_data, m = 5, method = "mean", seed = 420)
-housing_data_full  = complete(housing_data_temp, 1)
-housing_data_full$ocean_proximity = as.factor(housing_data_full$ocean_proximity)
-```
-
-TODO: Josh find the right place for this section
-
-```{r}
-housing_data_nc = housing_data_full[, -10]#remove text variable for now
+housing_data_nc = housing_data[, -10]#remove text variable for now
 
 corrmatrix = cor(housing_data_nc)
 
@@ -177,13 +174,15 @@ highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly c
 
 # Methods
 
-First we want to split the data into training and testing data. We will use an 80/20 split of a randomized sample. We will use a set seed to get repeatability.
+Possibly consider removing the Island promiximity class as mentioned.
+
+First we want to split the data into training and testing data. We will use an 70/30 split of a randomized sample. We will use a set seed to get repeatability.
 
 ```{r}
 set.seed(420)
-housing_data_idx  = sample(nrow(housing_data), size = trunc(0.80 * nrow(housing_data)))
-housing_trn_data = housing_data[housing_data_idx, ]
-housing_tst_data = housing_data[-housing_data_idx, ]
+housing_trn_idx = createDataPartition(housing_data$ocean_proximity, p = .70, list = FALSE)
+housing_trn_data = housing_data[housing_trn_idx, ]
+housing_tst_data = housing_data[-housing_trn_idx, ]
 ```
 
 We will set the test data aside for now and work with the training data to start.
@@ -418,7 +417,7 @@ TODO: is the "Near Bay" mean only San Fran or are there other Bay's?
 
 TODO: these are likely better plots than what I stubbed in above, so they likely should be integrated in the right place.
 
-```{r}
+```{r eval=FALSE}
 temp_housing_data = housing_data_full[housing_data_full$ocean_proximity != "ISLAND", ] #possibly consider removing #ISLAND promiximity homes. There are 5 in the dataset out of 20k observations.
 
 start_mod = lm(median_house_value ~ (.)^2, data = temp_housing_data)
@@ -430,7 +429,7 @@ summary(back_bic_mod)
 
 
 
-```{r echo=TRUE}
+```{r eval=FALSE}
 #lets use Weighted Least Squares on this model to cover potential heteroskedasticity.
 
 back_bic_mod_fitted = fitted(back_bic_mod)
