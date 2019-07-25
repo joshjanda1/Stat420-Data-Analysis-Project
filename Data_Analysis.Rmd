@@ -1,41 +1,185 @@
 ---
-title: "Data Analysis"
-output: html_document
+title: "Predicting Housing Prices - Data Analysis Project"
+author: "Aaron Blythe, ablythe; Josh Janda: joshlj2; Jeanette Pettibone, jgp4"
+date: "7/21/2019"
+output:
+  html_document: 
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
 ---
 
-```{r}
+
+# Technical Requirements
+
+You may need to install Cairo on your operating system to run this notebook. See the README for details.
+```{r, message = FALSE, warning = FALSE}
+#if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
+#if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+#if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
 library(readr)
-library(knitr)
-library(caret)
-
-housing_data = read_csv("housing.csv")#first line of housing 
-housing_data$median_house_value[1:100]
-
-```
-```{r}
-summary(housing_data)#gives us a summary of each column. Note that total bedrooms has 207 NA's. We will need to impute these values
-```
-```{r}
 library(ggplot2)
-#we want to look at shape of distribution to get a good idea of what to impute
-ggplot(housing_data, aes(x = total_bedrooms)) +
-  geom_histogram(bins = 40) +
-  xlab("Total Bedrooms") +
-  ylab("Density") +
-  ggtitle("Histogram of Total Bedrooms (noncontinuous variable)")
-#using mean for now
-```
-```{r}
+library(knitr)
+library(tidyverse)
+library(caret)
+library(leaps)
+library(car)
 library(mice)
+library(scales)
+library(RColorBrewer)
+library(plotly)
+```
 
-housing_data_temp = mice(data = housing_data, m = 5, method = "mean", seed = 420)
-housing_data_full  = complete(housing_data_temp, 1)
-housing_data_full$ocean_proximity = as.factor(housing_data_full$ocean_proximity)
+# Introduction
+
+## Predicting Housing Prices
+
+The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about houses within a particular block.
+
+While this project focuses on prediction we are fully aware and want you the reader to also be aware that housing prices have increased dramatically since 1990, when the data was collected. This model should not be used to predict the actual future. This is a purely academic endeavor to explore statistical prediction.
+
+The goal of the project is to create the model that can best predict home prices in California given reasonable test/train splits in the data.
+
+## California Housing Prices Dataset
+
+We're using the California Housing Prices dataset from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.  
+
+We loaded `housing.csv` into R.
+
+```{r}
+housing_data = read_csv("housing.csv")
+housing_data$median_house_value[1:100]
+```
+
+The dataset contains 20640 observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.  
+
+- longitude: A measure of how far west a house is; a higher value is farther west
+- latitude: A measure of how far north a house is; a higher value is farther north
+- housingMedianAge: Median age of a house within a block; a lower number is a newer building
+- totalRooms: Total number of rooms within a block
+- totalBedrooms: Total number of bedrooms within a block
+- population: Total number of people residing within a block
+- households: Total number of households, a group of people residing within a home unit, for a block
+- medianIncome: Median income for households within a block of houses (measured in tens of thousands of US Dollars)
+- oceanProximity: Location of the house w.r.t ocean/sea
+- medianHouseValue: Median house value for households within a block (measured in US Dollars)
+
+This dataset meets all of the stated criteria for the project including:
+
+* A minimum 200 observations
+* A numeric response variable: `median_house_value`
+* At least one categorical predictor: `oceanProximity`
+* At least two numeric predictors: the remaining attributes
+
+Let's look at a summary of each column.
+
+```{r}
+summary(housing_data)
+```
+
+Note that the total bedrooms variable has *207* NA values. We will address this issue in our methods section.
+
+# Methods
+
+## Data Cleaning
+
+Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `oceanProximity` from text-based to a factor variable.  
+
+```{r}
+housing_data$ocean_proximity = as.factor(housing_data$ocean_proximity)
+ocean_proximity = housing_data$ocean_proximity
+```
+
+We see that the factor variable `oceanProximity` has the following $`r length(levels(ocean_proximity))`$ levels: $`r levels(ocean_proximity)`$.
+
+The other thing to consider is missing data.
+
+```{r}
+sum(is.na(housing_data))
+total_bedrooms = housing_data$total_bedrooms
+sum(is.na(total_bedrooms))
+```
+
+There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision. One thing we can do to solve this issue of NA values in this variable is to impute data points. To impute data points, we will first want to take a look at the distribution of this variable to see which imputation method will work best.
+
+```{r cache=TRUE}
+bedroom_mean = mean(housing_data$total_bedrooms, na.rm=TRUE)
+bedroom_median = median(housing_data$total_bedrooms, na.rm=TRUE)
+ggplot(housing_data, aes(x = total_bedrooms)) +
+  geom_histogram(bins = 40, color = "black", fill = "blue") +
+  geom_vline(aes(xintercept = bedroom_mean, color = "Mean"), lwd = 1.5) +
+  geom_vline(aes(xintercept = bedroom_median, color = "Median"), lwd = 1.5) +
+  xlab("Total Bedrooms") +
+  ylab("Frequency") +
+  ggtitle("Histogram of Total Bedrooms (noncontinuous variable)") +
+  scale_color_manual(name = "Summary Stats", labels = c("Mean", "Median"), values = c("red", "green"))
+```
+
+Looking at the histogram above, we can see that the best imputation method is going to be the median of the total bedrooms variable.
+
+```{r}
+housing_data$total_bedrooms[is.na(housing_data$total_bedrooms)] = bedroom_median
+```
+"""
+
+Let's go ahead and remove this section.
+```{r}
+plot(total_bedrooms ~ total_rooms, data = housing_data, col="dodgerblue",
+     xlab = "Total Rooms", ylab = "Total Bedrooms",
+     main = "Total Bedrooms vs Total Rooms")
 ```
 
 
+Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
+
+```{r, message = FALSE, warning = FALSE}
+housing_data %>% 
+  group_by(total_rooms) %>% 
+  summarize(median.total_bedrooms = median(total_bedrooms, na.rm = TRUE))
+```
+"""
+
+Looking at the structure of the dataset after this clean up, we see that besides the one factor variable `ocean_proximity`, we are left with nine numeric variables, three of which are continuous (`longitude`, `latitude`, and `median_income`) and six of which are discrete (`housing_median_age`, `total_rooms`, `total_bedrooms`, `population`, `households`, and `median_house_value`).
+
 ```{r}
-housing_data_nc = housing_data_full[, -10]#remove text variable for now
+str(housing_data)
+```
+
+Let's look a bit more closely at the distribution of the numeric variables.
+
+```{r, fig.height=10, fig.width=14}
+par(mfrow = c(3, 3))
+hist(housing_data$longitude, breaks = 20, main = "longitude", border="darkorange", col="dodgerblue")
+hist(housing_data$latitude, breaks = 20, main = "latitude", border="darkorange", col="dodgerblue")
+hist(housing_data$housing_median_age, breaks = 20, main = "housing_median_age", border="darkorange", col="dodgerblue")
+hist(housing_data$total_rooms, breaks = 20, main = "total_rooms", border="darkorange", col="dodgerblue")
+hist(housing_data$total_bedrooms, breaks = 20, main = "total_bedrooms", border="darkorange", col="dodgerblue")
+hist(housing_data$population, breaks = 20, main = "population", border="darkorange", col="dodgerblue")
+hist(housing_data$households, breaks = 20, main = "households", border="darkorange", col="dodgerblue")
+hist(housing_data$median_income, breaks = 20, main = "median_income", border="darkorange", col="dodgerblue")
+hist(housing_data$median_house_value, breaks = 20, main = "median_house_value", border="darkorange", col="dodgerblue")
+```
+
+
+## Variable Selection
+
+And let's look at the relationships between all the possible variables.
+
+```{r cache=TRUE}
+pairs(housing_data, col = "dodgerblue")
+```
+
+In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential collinearity of households and total bedrooms (and potentially total rooms).
+^^Review and remove
+
+TODO: Josh find the right place for this section
+Note from Jeanette: I stuck this is a separate section called Variable Selection for now, just to isolate it.  Please place it wherever it makes sense to you.
+
+Let's keep this at the end since this will lead into our methods as we are looking at correlation.
+```{r}
+housing_data_nc = housing_data[, -10]#remove text variable for now
 
 corrmatrix = cor(housing_data_nc)
 
@@ -44,12 +188,301 @@ kable(t(corrmatrix))
 highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
-```{r}
-library(scales)
-library(RColorBrewer)
-library(plotly)
+Possibly consider removing the Island promiximity class as mentioned.
 
-plot_map = ggplot(housing_data_full, 
+## Training and Test Data
+
+First we want to split the data into training and testing data. We will use an 70/30 split of a randomized sample. We will use a set seed to get repeatability.
+
+```{r}
+set.seed(420)
+housing_trn_idx = createDataPartition(housing_data$ocean_proximity, p = .70, list = FALSE)
+housing_trn_data = housing_data[housing_trn_idx, ]
+housing_tst_data = housing_data[-housing_trn_idx, ]
+```
+
+We will set the test data aside for now and work with the training data to start.
+
+## Model Selection
+
+### Using all Model Subsets
+
+As a starting point we want to get an idea which parameters are good ones to use in a potential model. 
+
+We can use `leaps` to tell us the "best" model, which is the one with the lowest Adjusted $R^2$ for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
+
+Note from Jeanette - the plot / legend / data in the section below are showing up very weird for me.  Maybe we can chat about this section this weekend?  I have a few questions, too.
+
+```{r}
+regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2,
+               data = housing_trn_data,
+               nbest = 1,     # 1 best model for each number of predictors
+               nvmax = 10,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
+# The output of this is long and not very pretty, there is better output below.
+#regsubsets2.out
+
+summary.out = summary(regsubsets.out)
+dont_print_df = as.data.frame(summary.out$outmat)
+## Adjusted R2
+plot(regsubsets.out, scale = "adjr2", main = "Adjusted R^2")
+
+#layout(matrix(1:2, ncol = 2))
+## Adjusted R2
+res.legend = subsets(regsubsets.out, statistic="adjr2", legend = FALSE, min.size = 5, main = "Adjusted R^2")
+## Mallow Cp - A small value of Cp means that the model is relatively precise
+#res.legend = subsets(regsubsets2.out, statistic="cp", legend = FALSE, min.size = 5, main = "Mallow Cp")
+abline(a = 1, b = 1, lty = 2)
+res.legend
+
+which.max(summary.out$adjr2)
+summary.out$which[which.max(summary.out$adjr2),]
+best_adjr2 = summary.out$adjr2[which.max(summary.out$adjr2)]
+```
+
+From this information we see that there are three models which have an Adjusted $R^2$ close to the maximum: $`r best_adjr2`$.  We'll use these three models as a starting point for model selection, as well as include a fourth model that we will introduce below.
+
+```{r}
+best_leaps_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
+#summary(best_leaps_model_1)
+names(coef(best_leaps_model_1))[-1]
+```
+
+The first model to explore, `best_leaps_model_1`, uses the following predictors:
+
+- `longitude`
+- `latitude`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `longitude:latitude`
+- `longitude:median_income`
+- `longitude:I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+- `median_income:population`
+
+This is an interesting set of predictors and they make a lot of sense. Housing prices are likely tied to the big cites (San Francisco, Los Angeles, etc.). A couple of ways to denote these are latitude, longitude and whether the location is near a Bay. Median Income may also be a proxy for the larger cities versus the more rural areas.
+
+The second model is explore, `best_leaps_model_2`, has an Adjusted $R^2$ of $`r best_adjr2`$, which ties the Adjusted $R^2$ of `best_leaps_model_1`. To extract this model we are using the graph of the Adjusted $R^2$ to get the parameters from the second row from the top. There are similarities, but a couple differences here.
+
+```{r}
+best_leaps_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_leaps_model_2)
+names(coef(best_leaps_model_2))[-1]
+```
+
+The `best_leaps_model_2` uses the following predictors:
+
+- `housing_median_age`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `housing_median_age:longitude`
+- `longitude:median_income`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+
+The third model we'll explore, `best_leaps_model_3`, also scored an adjusted $R^2$ of $`r best_adjr2`$.
+
+```{r}
+best_leaps_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_leaps_model_3)
+names(coef(best_leaps_model_3))[-1]
+```
+
+The `best_leaps_model_3` uses the following predictors:
+
+- `median_income`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `median_income:longitude`
+- `median_income:latitude`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+
+We will also include a fourth model, `full_twoway_model`, which includes all variables in the model as well as their two-way interactions.
+
+```{r}
+full_twoway_model = twoway_mod_start = lm(median_house_value ~ (.)^2, data = housing_trn_data)
+```
+
+
+We can now compare the AIC of these four models.
+
+```{r}
+extractAIC(best_leaps_model_1)
+extractAIC(best_leaps_model_2)
+extractAIC(best_leaps_model_3)
+extractAIC(full_twoway_model)
+```
+
+We see that the model with the best AIC is `full_twoway_model`, with a score of ` r extractAIC(full_twoway_model)[2]`.
+
+TODO: in addition to these 3 models, the model that Josh created initially should be integrated here. <- DONE
+
+### Using AIC and BIC
+
+All 4 of these models are good candidates for forward and backward AIC and BIC
+
+```{r}
+n = length(resid(full_twoway_model))
+back_twoway_mod_finish_bic = step(full_twoway_model, direction = "backward", k = log(n), trace = 0)
+back_twoway_mod_finish_aic = step(full_twoway_model, direction = "backward", trace = 0)
+
+forward_twoway_mod_finish_bic = step(full_twoway_model, direction = "forward", k = log(n), trace = 0)
+forward_twoway_mod_finish_aic = step(full_twoway_model, direction = "forward", trace = 0)
+
+back_aic_mod_1 = step(best_leaps_model_1, direction = "backward", trace = 0)
+back_aic_mod_2 = step(best_leaps_model_2, direction = "backward", trace = 0)
+back_aic_mod_3 = step(best_leaps_model_3, direction = "backward", trace = 0)
+
+len = length(best_leaps_model_1)
+back_bic_mod_1 = step(best_leaps_model_1, direction = "backward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+back_bic_mod_2 = step(best_leaps_model_2, direction = "backward", k = log(len), trace = 0)
+len = length(best_leaps_model_3)
+back_bic_mod_3 = step(best_leaps_model_3, direction = "backward", k = log(len), trace = 0)
+
+forward_aic_mod_1 = step(best_leaps_model_1, direction = "forward", trace = 0)
+forward_aic_mod_2 = step(best_leaps_model_2, direction = "forward", trace = 0)
+forward_aic_mod_3 = step(best_leaps_model_3, direction = "forward", trace = 0)
+
+len = length(best_leaps_model_1)
+forward_bic_mod_1 = step(best_leaps_model_1, direction = "forward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+forward_bic_mod_2 = step(best_leaps_model_2, direction = "forward", k = log(len), trace = 0)
+len = length(best_leaps_model_2)
+forward_bic_mod_3 = step(best_leaps_model_2, direction = "forward", k = log(len), trace = 0)
+```
+
+```{r}
+aic_and_bic_results = data.frame(
+                                 "AIC" = c("Backward" = c("Two-Way" = extractAIC(back_twoway_mod_finish_aic)[2],
+                                                          "Leap M1" = extractAIC(back_aic_mod_1)[2],
+                                                          "Leap M2" = extractAIC(back_aic_mod_2)[2],
+                                                          "Leap M3" = extractAIC(back_aic_mod_3)[2]
+                                                          ),
+                                           "Forward" =  c("Two-Way" = extractAIC(forward_twoway_mod_finish_aic)[2],
+                                                          "Leap M1" = extractAIC(forward_aic_mod_1)[2],
+                                                          "Leap M2" = extractAIC(forward_aic_mod_2)[2],
+                                                          "Leap M3" = extractAIC(forward_aic_mod_3)[2]
+                                                         )
+                                          ),
+                                 
+                                 "BIC" = c("Backward" = c("Two-Way" = extractAIC(back_twoway_mod_finish_bic)[2],
+                                                          "Leap M1" = extractAIC(back_bic_mod_1)[2],
+                                                          "Leap M2" = extractAIC(back_bic_mod_2)[2],
+                                                          "Leap M3" = extractAIC(back_bic_mod_3)[2]
+                                                          ),
+                                           "Forward" =  c("Two-Way" = extractAIC(forward_twoway_mod_finish_bic)[2],
+                                                          "Leap M1" = extractAIC(forward_bic_mod_1)[2],
+                                                          "Leap M2" = extractAIC(forward_bic_mod_2)[2],
+                                                          "Leap M3" = extractAIC(forward_bic_mod_3)[2]
+                                                         )
+                                          )
+                                
+                              )
+kable(aic_and_bic_results)
+```
+
+The models that we started with from leaps did not improve a whole lot, and neither did the model that we started with a full two-way interaction. In most cases they are the same, however we did find that `back_twoway_mod_finish_aic` slightly improved over `full_twoway_model`, which was the original model.
+
+The Extract AIC will tell us the number of parameters and the resulting AIC.
+"Smaller" models are better with regard to the number of parameters and the we want an lower overall resulting AIC.
+
+We now have the three models `best_leaps_model_1`, `back_aic_mod_2` and `best_leaps_model_3` to test going forward. Let's check the assumptions on these three models.
+
+TODO: update the diagnostic function, as it is currently just the one from the homework (with change to limit to 5000 to make it work for this dataset) <- I will work on this ~Josh
+
+```{r}
+diagnostics = function(model, pcol = 'grey', lcol = 'dodgerblue', alpha = 0.05, plotit = TRUE, testit = TRUE) {
+  if(plotit == TRUE){
+    # Two plots, side-by-side
+    par(mfrow = c(1, 2))
+    # A fitted versus residuals plot
+    plot(fitted(model), resid(model), col = pcol, pch = 20, cex = 2, xlab = "Fitted", ylab = "Residuals", main = "Fitted vs. Residuals")
+    abline(h = 0, col = lcol, lwd = 2)
+    
+    # A Normal Q-Q plot of the residuals
+    qqnorm(resid(model), col = pcol, pch = 20, cex = 2, main = "Normal Q-Q Plot")
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if(testit == TRUE){
+    # NOTE: the shapiro test is limited to the first 5000 records
+    # See: https://stackoverflow.com/questions/28217306/error-in-shapiro-test-sample-size-must-be-between
+    p_val = shapiro.test(resid(model)[0:5000])$p.value
+    decision = ifelse(p_val < alpha, "Reject", "Fail to Reject")
+    list(p_val = p_val, decision = decision)
+  }
+}
+```
+
+
+```{r}
+diagnostics(best_leaps_model_1)
+diagnostics(back_aic_mod_2)
+diagnostics(best_leaps_model_3)
+```
+
+TODO: discuss the output of the diagnostics plot.
+
+## Detect Overfitting
+
+```{r}
+# From the text: http://daviddalpiaz.github.io/appliedstats/variable-selection-and-model-building.html
+calc_loocv_rmse = function(model) {
+  sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
+}
+```
+
+```{r}
+calc_loocv_rmse(best_leaps_model_1)
+calc_loocv_rmse(back_aic_mod_2)
+calc_loocv_rmse(best_leaps_model_3)
+```
+
+Model 1 has the lowest loocv_rmse.
+
+## Compare models with ANova
+
+```{r}
+anova(best_leaps_model_1, back_aic_mod_2)
+anova(best_leaps_model_1, best_leaps_model_3)
+anova(back_aic_mod_2, best_leaps_model_3)
+```
+
+TODO: discuss comparison of models.
+
+# Results
+
+## Make predictions
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(best_leaps_model_1, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(back_aic_mod_2, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+```{r}
+actual = housing_tst_data$median_house_value
+predicted = predict(best_leaps_model_3, newdata = housing_tst_data)
+100 * mean((abs(actual - predicted)) / actual)
+```
+
+Each of the models have percent error of around 28%.
+
+# Discussion
+
+TODO: put this back in, pulling for now since it makes things not loa
+```{r eval=FALSE}
+plot_map = ggplot(housing_data, 
                   aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
                       tr = total_rooms, tb = total_bedrooms, hh = households, mi = median_income)) +
               geom_point(aes(size = population), alpha = 0.4) +
@@ -61,29 +494,31 @@ plot_map = ggplot(housing_data_full,
               labs(color = "Median House Value (in $USD)", size = "Population")
 plot_map_tt = ggplotly(plot_map)
 
-#plot_map_tt
+plot_map_tt
 ```
 
-```{r}
+The graph above displays a map of all the data points in this dataset, with longitude on the x-axis and latitude on the y-axis and each point being color codes to it's median home value level. We can see that there are two very popular locations, which are the homes on the coastline as well as in the Bay areas. Looking at the color gradient legend, we can see that the homes in these "clusters" are substiantially higher in value than in homes not on the coastline or near the north of the state. This tells us that location, or Ocean Proximity, will likely play a large role in predicting the median house value.
+
+TODO: discussion of the rad map and the hot spots by the coast and the Bay's <- done
+TODO: is the "Near Bay" mean only San Fran or are there other Bay's? <- there are most likely other bays
+
+
+
+TODO: these are likely better plots than what I stubbed in above, so they likely should be integrated in the right place.
+
+```{r eval=FALSE}
 temp_housing_data = housing_data_full[housing_data_full$ocean_proximity != "ISLAND", ] #possibly consider removing #ISLAND promiximity homes. There are 5 in the dataset out of 20k observations.
-set.seed(420)
-train_index = createDataPartition(temp_housing_data$ocean_proximity, p = .70, list = FALSE)
 
-housing_train = temp_housing_data[train_index,]
-housing_test = temp_housing_data[-train_index,]
-```
-
-```{r}
-start_mod = lm(median_house_value ~ (.)^2, data = housing_train)
+start_mod = lm(median_house_value ~ (.)^2, data = temp_housing_data)
  
 n = length(resid(start_mod))
-back_bic_mod = step(start_mod, direction = "backward", k = log(n), trace = FALSE)
+back_bic_mod = step(start_mod, direction = "backward", k = log(n), trace = 0)
 summary(back_bic_mod)
 ```
 
 
 
-```{r echo=TRUE}
+```{r eval=FALSE}
 #lets use Weighted Least Squares on this model to cover potential heteroskedasticity.
 
 back_bic_mod_fitted = fitted(back_bic_mod)
@@ -104,29 +539,3 @@ plot(
       WLS_back_bic_mod$residuals
 )
 ```
-```{r}
-rmse = function(predicted, actual) {
-  sqrt(sum((predicted - actual)^2) / length(actual))
-}
-```
-```{r}
-rmse_train_norm = rmse(back_bic_mod$fitted.values, housing_train$median_house_value)
-rmse_train_wls = rmse(WLS_back_bic_mod$fitted.values, housing_train$median_house_value)
-
-predicted_norm = predict(back_bic_mod, housing_test)
-predicted_wls = predict(WLS_back_bic_mod, housing_test)
-
-rmse_test_norm = rmse(predicted_norm, housing_test$median_house_value)
-rmse_test_wls = rmse(predicted_wls, housing_test$median_house_value)
-
-
-rmse_results = data.frame(
-                          "Normal Model" = c(rmse_train_norm, rmse_test_norm),
-                          "WLS Model" = c(rmse_train_wls, rmse_test_wls)
-                          )
-
-kable(t(rmse_results), col.names = c("Train RMSE", "Test RMSE"))
-##We can see here that WLS is garbage. Throw it away and pretend I never included it
-
-```
-
