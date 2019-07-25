@@ -7,13 +7,18 @@ output:
     toc: yes
   pdf_document: default
 urlcolor: cyan
+editor_options: 
+  chunk_output_type: console
 ---
 
-Installation note: You may need to install Cairo on your operating system to run this notebook. See README for details.
-```{r}
-if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
-if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
-if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
+
+# Technical Requirements
+
+You may need to install Cairo on your operating system to run this notebook. See the README for details.
+```{r, message = FALSE, warning = FALSE}
+#if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
+#if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+#if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
 library(readr)
 library(ggplot2)
 library(knitr)
@@ -29,23 +34,21 @@ library(plotly)
 
 # Introduction
 
+## Predicting Housing Prices
+
 The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about houses within a particular block.
 
-While this project focuses on prediction we are fully aware and want you the reader to also be aware that housing prices increased incredibly after this time period, then the bubble burst for a while and housing prices increased again. This model should not be used to predict the actual future. This is a purely academic endeavor to explore statistical prediction.
+While this project focuses on prediction we are fully aware and want you the reader to also be aware that housing prices have increased dramatically since 1990, when the data was collected. This model should not be used to predict the actual future. This is a purely academic endeavor to explore statistical prediction.
 
 The goal of the project is to create the model that can best predict home prices in California given reasonable test/train splits in the data.
 
-## Dataset
+## California Housing Prices Dataset
 
 We're using the California Housing Prices dataset from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.  
 
 We loaded `housing.csv` into R.
 
 ```{r}
-library(readr)
-library(knitr)
-library(caret)
-
 housing_data = read_csv("housing.csv")
 housing_data$median_house_value[1:100]
 ```
@@ -66,15 +69,17 @@ The dataset contains 20640 observations and 10 attributes (9 predictors and 1 re
 This dataset meets all of the stated criteria for the project including:
 
 * A minimum 200 observations
-* A numeric response variable - `median_house_value`
-* At least one categorical predictor- `oceanProximity`
-* At least two numeric predictors - the remaining attributes 
+* A numeric response variable: `median_house_value`
+* At least one categorical predictor: `oceanProximity`
+* At least two numeric predictors: the remaining attributes
 
 Let's look at a summary of each column.
 
 ```{r}
 summary(housing_data)#gives us a summary of each column. Note that total bedrooms has 207 NA's. We will need to impute these values
 ```
+
+# Methods
 
 ## Data Cleaning
 
@@ -116,15 +121,16 @@ Looking at the histogram above, we can see that the best imputation method is go
 housing_data$total_bedrooms[is.na(housing_data$total_bedrooms)] = bedroom_median
 ```
 
-
 ```{r}
-plot(housing_data$total_bedrooms ~ housing_data$total_rooms, col="dodgerblue")
+plot(total_bedrooms ~ total_rooms, data = housing_data, col="dodgerblue",
+     xlab = "Total Rooms", ylab = "Total Bedrooms",
+     main = "Total Bedrooms vs Total Rooms")
 ```
+
 
 Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
 
 ```{r, message = FALSE, warning = FALSE}
-library(tidyverse)
 housing_data %>% 
   group_by(total_rooms) %>% 
   summarize(median.total_bedrooms = median(total_bedrooms, na.rm = TRUE))
@@ -151,16 +157,21 @@ hist(housing_data$median_income, breaks = 20, main = "median_income", border="da
 hist(housing_data$median_house_value, breaks = 20, main = "median_house_value", border="darkorange", col="dodgerblue")
 ```
 
+
+## Variable Selection
+
 And let's look at the relationships between all the possible variables.
 
 ```{r cache=TRUE}
 pairs(housing_data, col = "dodgerblue")
 ```
 
-In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential colinearity of households and total bedrooms (and potentially total rooms).
+In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential collinearity of households and total bedrooms (and potentially total rooms).
 ^^Review and remove
 
 TODO: Josh find the right place for this section
+Note from Jeanette: I stuck this is a separate section called Variable Selection for now, just to isolate it.  Please place it wherever it makes sense to you.
+
 Let's keep this at the end since this will lead into our methods as we are looking at correlation.
 ```{r}
 housing_data_nc = housing_data[, -10]#remove text variable for now
@@ -172,9 +183,9 @@ kable(t(corrmatrix))
 highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
-# Methods
-
 Possibly consider removing the Island promiximity class as mentioned.
+
+## Training and Test Data
 
 First we want to split the data into training and testing data. We will use an 70/30 split of a randomized sample. We will use a set seed to get repeatability.
 
@@ -187,14 +198,20 @@ housing_tst_data = housing_data[-housing_trn_idx, ]
 
 We will set the test data aside for now and work with the training data to start.
 
+## Model Selection
+
+### Using all Model Subsets
+
 As a starting point we want to get an idea which parameters are good ones to use in a potential model. 
 
-We can use leaps to tell us the "best" model - the one with the lowest Adjusted R^2 for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
+We can use `leaps` to tell us the "best" model, which is the one with the lowest Adjusted $R^2$ for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
+
+Note from Jeanette - the plot / legend / data in the section below are showing up very weird for me.  Maybe we can chat about this section this weekend?  I have a few questions, too.
 
 ```{r}
-regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^2,
+regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2,
                data = housing_trn_data,
-               nbest = 1,       # 1 best model for each number of predictors
+               nbest = 1,     # 1 best model for each number of predictors
                nvmax = 10,    # NULL for no limit on number of variables
                force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
 # The output of this is long and not very pretty, there is better output below.
@@ -215,30 +232,72 @@ res.legend
 
 which.max(summary.out$adjr2)
 summary.out$which[which.max(summary.out$adjr2),]
+best_adjr2 = summary.out$adjr2[which.max(summary.out$adjr2)]
 ```
 
-From this information we now start constructing 3 models that scored an adjusted R^2 of 0.66 to work with going forward:
+From this information we see that there are three models which have an Adjusted $R^2$ close to the maximum: $`r best_adjr2`$.  We'll use these three models as a starting point for model selection.
 
 ```{r}
 best_leaps_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
-summary(best_leaps_model_1)
+#summary(best_leaps_model_1)
+names(coef(best_leaps_model_1))[-1]
 ```
 
-This is an interesting set of variables and makes a lot of sense. Housing prices are likely tied to the big cites (San Francisco, Los Angeles, etc.). A couple of ways to denote these are latitude, longitude and whether the location is near a Bay. Median Income may also be a proxy for the larger cities versus the more rural areas.
+The first model to explore, `best_leaps_model_1`, uses the following predictors:
 
-There is a second model that is tied with the first at an Adjusted R^2 of 0.66. To extract this model we are using the graph of the Adjusted R^2 to get the parameters from the second row from the top. There are similarities, but a couple differences here.
+- `longitude`
+- `latitude`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `longitude:latitude`
+- `longitude:median_income`
+- `longitude:I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+- `median_income:population`
+
+This is an interesting set of predictors and they make a lot of sense. Housing prices are likely tied to the big cites (San Francisco, Los Angeles, etc.). A couple of ways to denote these are latitude, longitude and whether the location is near a Bay. Median Income may also be a proxy for the larger cities versus the more rural areas.
+
+The second model is explore, `best_leaps_model_2`, has an Adjusted $R^2$ of $`r best_adjr2`$, which ties the Adjusted $R^2$ of `best_leaps_model_1`. To extract this model we are using the graph of the Adjusted $R^2$ to get the parameters from the second row from the top. There are similarities, but a couple differences here.
 
 ```{r}
 best_leaps_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
 summary(best_leaps_model_2)
+names(coef(best_leaps_model_2))[-1]
 ```
 
-There is also a model that scored an adjusted R^2 of 0.65.
+The `best_leaps_model_2` uses the following predictors:
+
+- `housing_median_age`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `housing_median_age:longitude`
+- `longitude:median_income`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+
+The third model we'll explore, `best_leaps_model_3`, also scored an adjusted $R^2$ of $`r best_adjr2`$.
 
 ```{r}
 best_leaps_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
 summary(best_leaps_model_3)
+names(coef(best_leaps_model_3))[-1]
 ```
+
+The `best_leaps_model_3` uses the following predictors:
+
+- `median_income`
+- `I(ocean_proximity == \"INLAND\")TRUE`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE`
+- `median_income:longitude`
+- `median_income:latitude`
+- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
+- `housing_median_age:total_rooms`
+- `housing_median_age:population`
+
+
+We can now compare the AIC of these three models.
 
 ```{r}
 extractAIC(best_leaps_model_1)
@@ -246,8 +305,11 @@ extractAIC(best_leaps_model_2)
 extractAIC(best_leaps_model_3)
 ```
 
+We see that the model with the best AIC is `best_leaps_model_1`, with a score of $` r extractAIC(best_leaps_model_1)[2]`$.
+
 TODO: in addition to these 3 models, the model that Josh created initially should be integrated here.
 
+### Using AIC and BIC
 
 All 3 of these models are good candidates for forward and backward AIC and BIC
 
@@ -388,11 +450,6 @@ Each of the models have percent error of around 28%.
 
 # Discussion
 
-```{r}
-library(scales)
-library(RColorBrewer)
-library(plotly)
-```
 TODO: put this back in, pulling for now since it makes things not loa
 
 plot_map = ggplot(housing_data_full, 
