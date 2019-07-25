@@ -1,0 +1,122 @@
+---
+title: "Data_Analysis_Leaps_Subset_Selection.Rmd"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Methodology from: https://rstudio-pubs-static.s3.amazonaws.com/2897_9220b21cfc0c43a396ff9abf122bb351.html
+Applied to the California Housing Data Set
+
+
+```{r}
+# Used Google Colab to get quicker turn around on this, so had to install these packages
+# Using Google Colab for R is rad: https://stackoverflow.com/questions/54595285/how-to-use-r-with-google-colaboratory
+if(!require(leaps)) install.packages("leaps", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
+```
+
+
+```{r}
+library(readr)
+library(knitr)
+library(caret)
+library(leaps)
+library(car)
+
+housing_data = read_csv("housing.csv")
+is.factor(housing_data$ocean_proximity)
+housing_data$ocean_proximity = as.factor(housing_data$ocean_proximity)
+is.factor(housing_data$ocean_proximity)
+
+regsubsets.out = regsubsets(median_house_value ~ ., data = housing_data,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = NULL,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL, method = "exhaustive")
+regsubsets.out
+
+summary.out <- summary(regsubsets.out)
+as.data.frame(summary.out$outmat)
+## Adjusted R2
+plot(regsubsets.out, scale = "adjr2", main = "Adjusted R^2")
+
+library(car)
+layout(matrix(1:2, ncol = 2))
+## Adjusted R2
+res.legend = subsets(regsubsets.out, statistic="adjr2", legend = FALSE, min.size = 5, main = "Adjusted R^2")
+## Mallow Cp
+res.legend = subsets(regsubsets.out, statistic="cp", legend = FALSE, min.size = 5, main = "Mallow Cp")
+abline(a = 1, b = 1, lty = 2)
+res.legend
+
+which.max(summary.out$adjr2)
+
+summary.out$which[which.max(summary.out$adjr2),]
+
+best_leaps_add_model = lm(median_house_value ~ longitude + latitude + housing_median_age + total_rooms + total_bedrooms + population + households + median_income + I(ocean_proximity == "NEAR OCEAN") + I(ocean_proximity == "ISLAND"), data = housing_data)
+summary(best_leaps_add_model)
+
+```
+
+Let's try that again with the a model with all two-way interactions.
+
+NOTE: at least a couple of the linear combinations must be broken up or this spins for hours.
+
+On Google Colaboratory, I noticed that there was an error message “4  linear dependencies found”
+
+After removing two parameters `total_bedrooms` (which is colinear with `total_rooms`)  and `households` (which is colinear with `population`) this is down to “2  linear dependencies found” Reordering variables and trying again
+
+```{r}
+regsubsets2.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^2,
+               data = housing_data,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = 10,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
+# The output of this is long and not very pretty, there is better output below.
+#regsubsets2.out
+
+summary2.out <- summary(regsubsets2.out)
+dont_print_df = as.data.frame(summary2.out$outmat)
+## Adjusted R2
+plot(regsubsets2.out, scale = "adjr2", main = "Adjusted R^2")
+
+#layout(matrix(1:2, ncol = 2))
+## Adjusted R2
+res.legend = subsets(regsubsets2.out, statistic="adjr2", legend = FALSE, min.size = 5, main = "Adjusted R^2")
+## Mallow Cp - A small value of Cp means that the model is relatively precise
+#res.legend = subsets(regsubsets2.out, statistic="cp", legend = FALSE, min.size = 5, main = "Mallow Cp")
+abline(a = 1, b = 1, lty = 2)
+res.legend
+
+which.max(summary2.out$adjr2)
+summary2.out$which[which.max(summary2.out$adjr2),]
+```
+
+
+```{r}
+best_leaps_model = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_data)
+summary(best_leaps_model)
+```
+
+This is an interesting set of variables and makes a lot of sense. Housing prices are likely tied to the big cites (San Francisco, Los Angeles, etc.). A couple of ways to denote these are latitude, longitude and whether the location is near a Bay. Median Income may also be a proxy for the larger cities versus the more rural areas.
+
+There is a second model that is tied with the first at an Adjusted R^2 of 0.66. To extract this model we are using the graph of the Adjusted R^2 to get the parameters from the second row from the top. There are similarities, but a couple differences here.
+
+```{r}
+tied_best_leaps_model = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_data)
+summary(tied_best_leaps_model)
+```
+
+There is also a model that scored an adjusted R^2 of 0.65.
+
+```{r}
+second_best_leaps_model = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_data)
+summary(second_best_leaps_model)
+```
+
+
+
+
