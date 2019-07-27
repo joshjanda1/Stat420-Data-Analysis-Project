@@ -14,7 +14,8 @@ editor_options:
 
 # Technical Requirements
 
-You may need to install Cairo on your operating system to run this notebook. See the README for details.
+You may need to install Cairo on your operating system to run this notebook. To learn more see the Cairo documentation at https://www.cairographics.org/download/.
+
 ```{r, message = FALSE, warning = FALSE}
 #if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
 #if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
@@ -55,40 +56,39 @@ housing_data$median_house_value[1:100]
 
 The dataset contains 20640 observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.  
 
-- longitude: A measure of how far west a house is; a higher value is farther west
-- latitude: A measure of how far north a house is; a higher value is farther north
-- housingMedianAge: Median age of a house within a block; a lower number is a newer building
-- totalRooms: Total number of rooms within a block
-- totalBedrooms: Total number of bedrooms within a block
-- population: Total number of people residing within a block
-- households: Total number of households, a group of people residing within a home unit, for a block
-- medianIncome: Median income for households within a block of houses (measured in tens of thousands of US Dollars)
-- oceanProximity: Location of the house w.r.t ocean/sea
-- medianHouseValue: Median house value for households within a block (measured in US Dollars)
+- `longitude`: A measure of how far west a house is; a higher value is farther west
+- `latitude`: A measure of how far north a house is; a higher value is farther north
+- `housing_median_age`: Median age of a house within a block; a lower number is a newer building
+- `total_rooms`: Total number of rooms within a block
+- `total_bedrooms`: Total number of bedrooms within a block
+- `population`: Total number of people residing within a block
+- `households`: Total number of households, a group of people residing within a home unit, for a block
+- `median_income`: Median income for households within a block of houses (measured in tens of thousands of US Dollars)
+- `ocean_proximity`: Location of the house w.r.t ocean/sea
+- `median_house_value`: Median house value for households within a block (measured in US Dollars)
 
 This dataset meets all of the stated criteria for the project including:
 
 * A minimum 200 observations
 * A numeric response variable: `median_house_value`
-* At least one categorical predictor: `oceanProximity`
+* At least one categorical predictor: `ocean_proximity`
 * At least two numeric predictors: the remaining attributes
 
-Let's look at a summary of each column.
+Let's look at a summary of each variable:
 
 ```{r}
 summary(housing_data)
 ```
 
-Note that the total bedrooms variable has *207* NA values. We will address this issue in our methods section.
+Note that the `total_bedrooms` variable has *207* NA values. We will address this issue in the Data Cleaning section in Methods.
 
-# Methods
+Below is a visual representation of all data points in the dataset with `longitude` on the x-axis, `latitude` on the y-axis, and `median_house_value` shown in a color codes.
 
-## Data Cleaning
-
-```{r eval=FALSE}
+```{r}
 plot_map = ggplot(housing_data, 
-                  aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
-                      tr = total_rooms, tb = total_bedrooms, hh = households, mi = median_income)) +
+                  aes(x = longitude, y = latitude, color = median_house_value, 
+                      hma = housing_median_age, tr = total_rooms, tb = total_bedrooms,
+                      hh = households, mi = median_income)) +
               geom_point(aes(size = population), alpha = 0.4) +
               xlab("Longitude") +
               ylab("Latitude") +
@@ -97,39 +97,46 @@ plot_map = ggplot(housing_data,
               scale_color_distiller(palette = "Paired", labels = comma) +
               labs(color = "Median House Value (in $USD)", size = "Population")
 plot_map_tt = ggplotly(plot_map)
-
 plot_map_tt
 ```
 
-The graph above displays a map of all the data points in this dataset, with longitude on the x-axis and latitude on the y-axis and each point being color codes to it's median home value level. We can see that there are two very popular locations, which are the homes on the coastline as well as in the Bay areas. Looking at the color gradient legend, we can see that the homes in these "clusters" are substiantially higher in value than in homes not on the coastline or near the north of the state. This tells us that location, or Ocean Proximity, will likely play a large role in predicting the median house value.
+We see that on average the houses nearest to the ocean tend to have higher median house values, whereas those inland have the lower median values.  This difference is  quite substantial and tells us that the variable `ocean_proximity` will likely play a large role in predicting median house value.  
 
-Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `oceanProximity` from text-based to a factor variable.  
+It's worth noting that some ocean-adjacent locations, like the more isolated towns along California's northern most coast, have lower median house prices than other coastal housing, and some inland locations, like the towns near destinations such as Yosemite National Park and Lake Tahoe, do have higher median house prices than other inland housing.  Also interesting to note that the houses closest to large metropolitan areas such as San Francisco and Los Angeles have among the highest median house values, whereas the largely agricultural Central Valley has among the lowest.  This lets us know that we cannot rely on `ocean_proximity` alone to tell the whole story.
+
+# Methods
+
+## Data Cleaning
+
+### Categorical Variables
+
+Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `ocean_proximity` from text-based to a factor variable.  
 
 ```{r}
 housing_data$ocean_proximity = as.factor(housing_data$ocean_proximity)
-ocean_proximity = housing_data$ocean_proximity
+levels(housing_data$ocean_proximity)
 ```
+
+Taking a deeper dive into `ocean_proximity`, we see that the level `ISLAND` has a very low count compared to the other levels.
+
 ```{r}
 ggplot(housing_data, aes(x = factor(ocean_proximity))) +
   geom_bar(stat = "count", color = "black", fill = "blue")
 ```
 
-
-Looking at a barplot of the ocean proximity variable, we can see that the `ISLAND` factor is very low compared to every other factor in this variable. Let's look at the total count of each factor in this variable to get a better idea of the skewness in `ocean_proximity`.
-
+We looked at the total count of each level to get a better idea of the skew in `ocean_proximity`.
 
 ```{r}
 summary(housing_data$ocean_proximity)
 ```
 
-
-We see that the `ISLAND` factor has five rows, where every other factor has over 2000 rows. Due to possible issues of fitting models later on, we believe that it is best to remove this factor from `ocean_proximity`.
-
+In fact, `ISLAND` only has five rows, where every other level has over 2,000 rows. Due to possible issues with fitting models, we decided to remove this level from `ocean_proximity`.  We accepted the risk that our model will less accurately predict the value of houses on islands.
 
 ```{r}
 housing_data = housing_data[housing_data$ocean_proximity != "ISLAND", ]
 ```
 
+### Missing Data
 
 The other thing to consider is missing data.
 
@@ -139,7 +146,7 @@ total_bedrooms = housing_data$total_bedrooms
 sum(is.na(total_bedrooms))
 ```
 
-There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  We'll need to figure out how to handle this missing data.  However, looking at the relationship between `total_bedrooms` and `total_rooms`, it looks possible that this is collinearity and we won't gain any information by using `total_bedrooms` variable in our model.  Further testing is required before we can make this decision. One thing we can do to solve this issue of NA values in this variable is to impute data points. To impute data points, we will first want to take a look at the distribution of this variable to see which imputation method will work best.
+There are $`r sum(is.na(total_bedrooms))`$ observations with missing data for `total_bedrooms`.  One thing we can do to solve this issue of NA values in `total_bedrooms` is to impute data points. We first want to take a look at the distribution of this variable to see which imputation method will work best.
 
 ```{r cache=TRUE}
 bedroom_mean = mean(housing_data$total_bedrooms, na.rm=TRUE)
@@ -154,20 +161,22 @@ ggplot(housing_data, aes(x = total_bedrooms)) +
   scale_color_manual(name = "Summary Stats", labels = c("Mean", "Median"), values = c("red", "green"))
 ```
 
-Looking at the histogram above, we can see that the best imputation method is going to be the median of the total bedrooms variable.
+Looking at the distribution of the data in the histogram above, we decided to use the median of the `total_bedrooms` variable for our imputation method.
 
 ```{r}
 housing_data$total_bedrooms[is.na(housing_data$total_bedrooms)] = bedroom_median
 ```
 
 
-Looking at the structure of the dataset after this clean up, we see that besides the one factor variable `ocean_proximity`, we are left with nine numeric variables, three of which are continuous (`longitude`, `latitude`, and `median_income`) and six of which are discrete (`housing_median_age`, `total_rooms`, `total_bedrooms`, `population`, `households`, and `median_house_value`).
+### Post-Cleaning
+
+Looking at the structure of the dataset after cleaning the data, we see that besides the one factor variable `ocean_proximity`, we have nine numeric variables, three of which are continuous (`longitude`, `latitude`, and `median_income`) and six of which are discrete (`housing_median_age`, `total_rooms`, `total_bedrooms`, `population`, `households`, and `median_house_value`).
 
 ```{r}
 str(housing_data)
 ```
 
-Let's look a bit more closely at the distribution of the numeric variables.
+For a better sense of the distribution of the nine numeric variables, we looked at histograms for each of them.
 
 ```{r, fig.height=10, fig.width=14}
 par(mfrow = c(3, 3))
@@ -182,22 +191,14 @@ hist(housing_data$median_income, breaks = 20, main = "median_income", border="da
 hist(housing_data$median_house_value, breaks = 20, main = "median_house_value", border="darkorange", col="dodgerblue")
 ```
 
-
-## Variable Selection
-
-And let's look at the relationships between all the possible variables.
+To better understand the relationship between the all the variables, we looked at the pairs.
 
 ```{r cache=TRUE}
 pairs(housing_data, col = "dodgerblue")
 ```
 
-In addition to the already mentioned linear relationship between total rooms and total bedrooms, we will also need to look into potential collinearity of households and total bedrooms (and potentially total rooms).
-^^Review and remove
+It looks like there are some additional variables which may not be necessary due to collinearity.  We looked further into the correlations between the numeric variables and showed them in the table below: 
 
-TODO: Josh find the right place for this section
-Note from Jeanette: I stuck this is a separate section called Variable Selection for now, just to isolate it.  Please place it wherever it makes sense to you.
-
-Let's keep this at the end since this will lead into our methods as we are looking at correlation.
 ```{r}
 housing_data_nc = housing_data[, -10]#remove text variable for now
 
@@ -208,12 +209,18 @@ kable(t(corrmatrix))
 #highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
-Possibly consider removing the Island promiximity class as mentioned.
 
-Possibly create new variable of total bedrooms to households
+TODOs:
+
+- Does the section above fit where it is?
+- Josh will possibly create new variable of total bedrooms to households
+
+
 ## Training and Test Data
 
 First we want to split the data into training and testing data. We will use an 70/30 split of a randomized sample. We will use a set seed to get repeatability.
+
+Note that we decided to partition using `ocean_proximity` since this is a predictor that we believe will play a large role in predicting housing prices.
 
 ```{r}
 set.seed(420)
@@ -222,7 +229,6 @@ housing_trn_data = housing_data[housing_trn_idx, ]
 housing_tst_data = housing_data[-housing_trn_idx, ]
 ```
 
-We will set the test data aside for now and work with the training data to start.
 
 ## Model Selection
 
