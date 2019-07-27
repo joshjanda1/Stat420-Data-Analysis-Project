@@ -85,14 +85,51 @@ Note that the total bedrooms variable has *207* NA values. We will address this 
 
 ## Data Cleaning
 
+```{r eval=FALSE}
+plot_map = ggplot(housing_data, 
+                  aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
+                      tr = total_rooms, tb = total_bedrooms, hh = households, mi = median_income)) +
+              geom_point(aes(size = population), alpha = 0.4) +
+              xlab("Longitude") +
+              ylab("Latitude") +
+              ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              scale_color_distiller(palette = "Paired", labels = comma) +
+              labs(color = "Median House Value (in $USD)", size = "Population")
+plot_map_tt = ggplotly(plot_map)
+
+plot_map_tt
+```
+
+The graph above displays a map of all the data points in this dataset, with longitude on the x-axis and latitude on the y-axis and each point being color codes to it's median home value level. We can see that there are two very popular locations, which are the homes on the coastline as well as in the Bay areas. Looking at the color gradient legend, we can see that the homes in these "clusters" are substiantially higher in value than in homes not on the coastline or near the north of the state. This tells us that location, or Ocean Proximity, will likely play a large role in predicting the median house value.
+
 Initial exploration of the data showed us that there were a few steps we needed to take to make the data more useable.  Firstly, we changed the categorical variable `oceanProximity` from text-based to a factor variable.  
 
 ```{r}
 housing_data$ocean_proximity = as.factor(housing_data$ocean_proximity)
 ocean_proximity = housing_data$ocean_proximity
 ```
+```{r}
+ggplot(housing_data, aes(x = factor(ocean_proximity))) +
+  geom_bar(stat = "count", color = "black", fill = "blue")
+```
 
-We see that the factor variable `oceanProximity` has the following $`r length(levels(ocean_proximity))`$ levels: $`r levels(ocean_proximity)`$.
+
+Looking at a barplot of the ocean proximity variable, we can see that the `ISLAND` factor is very low compared to every other factor in this variable. Let's look at the total count of each factor in this variable to get a better idea of the skewness in `ocean_proximity`.
+
+
+```{r}
+summary(housing_data$ocean_proximity)
+```
+
+
+We see that the `ISLAND` factor has five rows, where every other factor has over 2000 rows. Due to possible issues of fitting models later on, we believe that it is best to remove this factor from `ocean_proximity`.
+
+
+```{r}
+housing_data = housing_data[housing_data$ocean_proximity != "ISLAND", ]
+```
+
 
 The other thing to consider is missing data.
 
@@ -122,24 +159,7 @@ Looking at the histogram above, we can see that the best imputation method is go
 ```{r}
 housing_data$total_bedrooms[is.na(housing_data$total_bedrooms)] = bedroom_median
 ```
-"""
 
-Let's go ahead and remove this section.
-```{r}
-plot(total_bedrooms ~ total_rooms, data = housing_data, col="dodgerblue",
-     xlab = "Total Rooms", ylab = "Total Bedrooms",
-     main = "Total Bedrooms vs Total Rooms")
-```
-
-
-Other possible things we could do is to fill in the missing `total_bedrooms` data with the median value of `total_bedrooms` grouped by `total_rooms`, since there is a relationship. 
-
-```{r, message = FALSE, warning = FALSE}
-housing_data %>% 
-  group_by(total_rooms) %>% 
-  summarize(median.total_bedrooms = median(total_bedrooms, na.rm = TRUE))
-```
-"""
 
 Looking at the structure of the dataset after this clean up, we see that besides the one factor variable `ocean_proximity`, we are left with nine numeric variables, three of which are continuous (`longitude`, `latitude`, and `median_income`) and six of which are discrete (`housing_median_age`, `total_rooms`, `total_bedrooms`, `population`, `households`, and `median_house_value`).
 
@@ -185,11 +205,12 @@ corrmatrix = cor(housing_data_nc)
 
 kable(t(corrmatrix))
 
-highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
+#highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
 Possibly consider removing the Island promiximity class as mentioned.
 
+Possibly create new variable of total bedrooms to households
 ## Training and Test Data
 
 First we want to split the data into training and testing data. We will use an 70/30 split of a randomized sample. We will use a set seed to get repeatability.
@@ -480,44 +501,12 @@ Each of the models have percent error of around 28%.
 
 # Discussion
 
-TODO: put this back in, pulling for now since it makes things not loa
-```{r eval=FALSE}
-plot_map = ggplot(housing_data, 
-                  aes(x = longitude, y = latitude, color = median_house_value, hma = housing_median_age,
-                      tr = total_rooms, tb = total_bedrooms, hh = households, mi = median_income)) +
-              geom_point(aes(size = population), alpha = 0.4) +
-              xlab("Longitude") +
-              ylab("Latitude") +
-              ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
-              theme(plot.title = element_text(hjust = 0.5)) +
-              scale_color_distiller(palette = "Paired", labels = comma) +
-              labs(color = "Median House Value (in $USD)", size = "Population")
-plot_map_tt = ggplotly(plot_map)
-
-plot_map_tt
-```
-
-The graph above displays a map of all the data points in this dataset, with longitude on the x-axis and latitude on the y-axis and each point being color codes to it's median home value level. We can see that there are two very popular locations, which are the homes on the coastline as well as in the Bay areas. Looking at the color gradient legend, we can see that the homes in these "clusters" are substiantially higher in value than in homes not on the coastline or near the north of the state. This tells us that location, or Ocean Proximity, will likely play a large role in predicting the median house value.
-
 TODO: discussion of the rad map and the hot spots by the coast and the Bay's <- done
 TODO: is the "Near Bay" mean only San Fran or are there other Bay's? <- there are most likely other bays
 
 
 
 TODO: these are likely better plots than what I stubbed in above, so they likely should be integrated in the right place.
-
-```{r eval=FALSE}
-temp_housing_data = housing_data_full[housing_data_full$ocean_proximity != "ISLAND", ] #possibly consider removing #ISLAND promiximity homes. There are 5 in the dataset out of 20k observations.
-
-start_mod = lm(median_house_value ~ (.)^2, data = temp_housing_data)
- 
-n = length(resid(start_mod))
-back_bic_mod = step(start_mod, direction = "backward", k = log(n), trace = 0)
-summary(back_bic_mod)
-```
-
-
-
 ```{r eval=FALSE}
 #lets use Weighted Least Squares on this model to cover potential heteroskedasticity.
 
