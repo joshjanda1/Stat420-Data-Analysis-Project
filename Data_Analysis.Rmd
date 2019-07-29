@@ -20,6 +20,7 @@ You may need to install Cairo on your operating system to run this notebook. To 
 if(!require(Cairo)) install.packages("Cairo", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(car)) install.packages("car", repos = "http://cran.us.r-project.org")
+if(!require(nortest)) install.packages("nortest", repos = "http://cran.us.r-project.org")
 library(readr)
 library(ggplot2)
 library(knitr)
@@ -31,6 +32,8 @@ library(mice)
 library(scales)
 library(RColorBrewer)
 library(plotly)
+library(nortest)
+library(lmtest)
 ```
 
 # Introduction
@@ -437,30 +440,53 @@ TODOs:
 - update the diagnostic function, as it is currently just the one from the homework (with change to limit to 5000 to make it work for this dataset) <- I will work on this ~Josh
 
 ```{r}
-diagnostics = function(model, pcol = 'grey', lcol = 'dodgerblue', alpha = 0.05, plotit = TRUE, testit = TRUE) {
-  if(plotit == TRUE){
-    # Two plots, side-by-side
-    par(mfrow = c(1, 2))
-    # A fitted versus residuals plot
-    plot(fitted(model), resid(model), col = pcol, pch = 20, cex = 2, xlab = "Fitted", ylab = "Residuals", main = "Fitted vs. Residuals")
-    abline(h = 0, col = lcol, lwd = 2)
-    
-    # A Normal Q-Q plot of the residuals
-    qqnorm(resid(model), col = pcol, pch = 20, cex = 2, main = "Normal Q-Q Plot")
-    qqline(resid(model), col = lcol, lwd = 2)
-  }
-  if(testit == TRUE){
-    # NOTE: the shapiro test is limited to the first 5000 records
-    # See: https://stackoverflow.com/questions/28217306/error-in-shapiro-test-sample-size-must-be-between
-    p_val = shapiro.test(resid(model)[0:5000])$p.value
-    decision = ifelse(p_val < alpha, "Reject", "Fail to Reject")
-    list(p_val = p_val, decision = decision)
-  }
+diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue", plots = TRUE, tests = TRUE, pointtype = 16) {
+	if (plots == TRUE) {
+		par(mfrow = c(2,2))
+		plot(
+				fitted(model),
+				resid(model),
+				pch = pointtype,
+				xlab = "Fitted Values",
+				ylab = "Residuals",
+				main = "Fitted vs Residuals",
+				col = pointcol
+			)
+		abline(h = 0, lwd = 2, col = linecol)
+		
+		qqnorm(
+				resid(model),
+				pch = pointtype,
+				main = "QQNorm Plot",
+				col = pointcol
+			)
+		qqline(
+				resid(model),
+				lwd = 2,
+				col = linecol
+				)
+	}
+	if (tests == TRUE) {
+		ad_test = ad.test(resid(model))
+		bp_test = bptest(model)
+		test_results = data.frame(
+									"Anderson-Darling Normality Test" = c("Test Statistic" = ad_test$statistic,
+															"P-Value" = ad_test$p.value,
+															"Result" = ifelse(ad_test$p.value < alpha, "Reject", "Fail To Reject")
+															),
+									"Breusch-Pagan Test" = c("Test Statistic" = bp_test$statistic,
+															"P-Value" = bp_test$p.value,
+															"Result" = ifelse(bp_test$p.value < alpha, "Reject", "Fail To Reject")
+															)
+									)
+		kable(t(test_results))
+	}
 }
 ```
 
 
 ```{r}
+diagnostics(back_twoway_mod_finish_aic)
 diagnostics(best_leaps_model_1)
 diagnostics(back_aic_mod_2)
 diagnostics(best_leaps_model_3)
