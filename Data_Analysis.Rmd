@@ -8,7 +8,7 @@ output:
   pdf_document: default
 urlcolor: cyan
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 
@@ -54,7 +54,7 @@ We loaded `housing.csv` into R.
 
 ```{r}
 housing_data = read_csv("housing.csv")
-housing_data$median_house_value[1:100]
+housing_data$median_house_value[1:100] #<- Do we need this in the final submission? I am thinking we can remove it.
 ```
 
 The dataset contains 20640 observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.  
@@ -203,20 +203,14 @@ pairs(housing_data, col = "dodgerblue")
 It looks like there are some additional variables which may not be necessary due to collinearity.  We looked further into the correlations between the numeric variables and showed them in the table below: 
 
 ```{r}
-housing_data_nc = housing_data[, -10]#remove text variable for now
+housing_data_nc = housing_data[, -10]
 
 corrmatrix = cor(housing_data_nc)
 
 kable(t(corrmatrix))
-
-#highcorr = findCorrelation(corrmatrix, cutoff = .60)#this will give you highly correlated variables
 ```
 
-
-TODOs:
-
-- Does the section above fit where it is?
-- Josh will possibly create new variable of total bedrooms to households
+One thing that sticks out is the high collinearity between `households` and `total_bedrooms`, as well as `households` and `total_rooms`. While these variables are highly correlated, we believe it is best to leave them in as they are influential in the pricing of homes typically. Overall, we do not believe that collinearility will play a substantial role in influencing our models so we will be keeping all variables.
 
 
 ## Training and Test Data
@@ -267,7 +261,7 @@ res.legend
 
 which.max(summary.out$adjr2)
 summary.out$which[which.max(summary.out$adjr2),]
-best_adjr2 = summary.out$adjr2[which.max(summary.out$adjr2)]
+best_adjr2 = summary.out$adjr2[which.max(summary.out$adjr2)] #<- ?? we use this variable three times to give adj r2
 ```
 
 From this information we see that there are three models which have an Adjusted $R^2$ close to the maximum: $`r best_adjr2`$.  We'll use these three models as a starting point for model selection, as well as include a fourth model that we will introduce below.
@@ -297,7 +291,7 @@ The second model is explore, `best_leaps_model_2`, has an Adjusted $R^2$ of $`r 
 
 ```{r}
 best_leaps_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-summary(best_leaps_model_2)
+#summary(best_leaps_model_2)
 names(coef(best_leaps_model_2))[-1]
 ```
 
@@ -318,7 +312,7 @@ The third model we'll explore, `best_leaps_model_3`, also scored an adjusted $R^
 
 ```{r}
 best_leaps_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-summary(best_leaps_model_3)
+#summary(best_leaps_model_3)
 names(coef(best_leaps_model_3))[-1]
 ```
 
@@ -339,15 +333,28 @@ We will also include a fourth model, `full_twoway_model`, which includes all var
 
 ```{r}
 full_twoway_model = twoway_mod_start = lm(median_house_value ~ (.)^2, data = housing_trn_data)
+twoway_adjr2 = summary(full_twoway_model)$adj.r.squared
 ```
+
+This model has an adjusted $R^2$ of $`r twoway_adjr2`$. Comparing the adjusted $R^2$ of all four models, we can see that this full two-way interaction model scores the highest which gives us reason to believe this model may be the best performer. In order to test this, we will do some more model testing and building below starting with looking at AIC performance.
 
 We can now compare the AIC of these four models.
 
 ```{r}
-extractAIC(best_leaps_model_1)
-extractAIC(best_leaps_model_2)
-extractAIC(best_leaps_model_3)
-extractAIC(full_twoway_model)
+aic_beginning_mods = data.frame(
+                                "Total Predictors" = c("Leaps Model 1" = extractAIC(best_leaps_model_1)[1],
+                                                       "Leaps Model 2" = extractAIC(best_leaps_model_2)[1],
+                                                       "Leaps Model 3" = extractAIC(best_leaps_model_3)[1],
+                                                       "Two-Way Int. Model" = extractAIC(full_twoway_model)[1]
+                                                       ),
+                                "AIC" = c(
+                                          "Leaps Model 1" = extractAIC(best_leaps_model_1)[2],
+                                          "Leaps Model 2" = extractAIC(best_leaps_model_2)[2],
+                                          "Leaps Model 3" = extractAIC(best_leaps_model_3)[2],
+                                          "Two-Way Int. Model" = extractAIC(full_twoway_model)[2]
+                                )
+                              )
+kable(aic_beginning_mods, align = c("c", "r"))
 ```
 
 We see that the model with the best (i.e., lowest) AIC is `full_twoway_model`, with a score of $`r extractAIC(full_twoway_model)[2]`$.  However, although this model has the lowest AIC, it also has far more predictors (and therefore is more complex) than the other three models - $`r extractAIC(full_twoway_model)[1]`$ compared to $`r extractAIC(best_leaps_model_1)[1]`$ predictors for `best_leaps_model_1`, $`r extractAIC(best_leaps_model_2)[1]`$ predictors for `best_leaps_model_2` and $`r extractAIC(best_leaps_model_3)[1]`$ predictors for `best_leaps_model_3`.  This is just something to keep in mind as we move forward.
@@ -357,7 +364,7 @@ We see that the model with the best (i.e., lowest) AIC is `full_twoway_model`, w
 All 4 of these models are good candidates for forward and backward AIC and BIC.
 
 TODOs:
-- None of the forward steps included a scope, though in the lectures / in the book they always included it.  Might be worth stating why this is the case and make an argument for it?
+- None of the forward steps included a scope, though in the lectures / in the book they always included it.  Might be worth stating why this is the case and make an argument for it? <- The scope should be the full model.
 
 ```{r}
 # full_twoway_model
@@ -428,13 +435,13 @@ kable(aic_and_bic_results)
 TODOs:
 - Jeanette to standardize variable names and how they are referred to (let's not call them "leaps" since that is just the library that has the function for doing the exhaustive search)
 
-The exhaustive models that we started with (`best_leaps_model_1`, `best_leaps_model_2`, and `best_leaps_model_3`) did not improve significantly.  Neither did `full_twoway_model` which started with a full two-way interaction. However the `back_twoway_mod_finish_aic` model did have slight improvement over `full_twoway_model`, which was originally the best performing model.
+The exhaustive models that we started with (`best_leaps_model_1`, `best_leaps_model_2`, and `best_leaps_model_3`) did not improve significantly.  Neither did `full_twoway_model` which started with a full two-way interaction. However the `back_twoway_mod_finish_aic` model did have slight improvement over `full_twoway_model`, which was originally the best performing model. 
 
 
 TODOs:
 - Not choosing the ones coming out of the full twoway model - we can tie this maybe to the discussion of the first extractAIC and that this model is far more complex and therefore might not be ideal despite its lower AIC??
 
-We now have the three models `best_leaps_model_1`, `back_aic_mod_2` and `best_leaps_model_3` to test going forward. Let's check the assumptions on these three models.
+We now have the four models `best_leaps_model_1`, `back_aic_mod_2` and `best_leaps_model_3` to test going forward. Let's check the assumptions on these three models.
 
 TODOs:
 - update the diagnostic function, as it is currently just the one from the homework (with change to limit to 5000 to make it work for this dataset) <- I will work on this ~Josh
@@ -442,7 +449,7 @@ TODOs:
 ```{r}
 diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue", plots = TRUE, tests = TRUE, pointtype = 16) {
 	if (plots == TRUE) {
-		par(mfrow = c(2,2))
+		par(mfrow = c(1, 3))
 		plot(
 				fitted(model),
 				resid(model),
@@ -465,21 +472,28 @@ diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue"
 				lwd = 2,
 				col = linecol
 				)
+		hist(
+		    resid(model),
+		    main = "Histogram of Residuals",
+		    col = pointcol,
+		    xlab = "Residuals",
+		    ylab = "Frequency"
+		    )
 	}
 	if (tests == TRUE) {
 		ad_test = ad.test(resid(model))
 		bp_test = bptest(model)
 		test_results = data.frame(
-									"Anderson-Darling Normality Test" = c("Test Statistic" = ad_test$statistic,
-															"P-Value" = ad_test$p.value,
+									"Anderson-Darling Normality Test" = c("Test Statistic" = round(ad_test$statistic, 5),
+															"P-Value" = round(ad_test$p.value, 5),
 															"Result" = ifelse(ad_test$p.value < alpha, "Reject", "Fail To Reject")
 															),
-									"Breusch-Pagan Test" = c("Test Statistic" = bp_test$statistic,
-															"P-Value" = bp_test$p.value,
+									"Breusch-Pagan Test" = c("Test Statistic" = round(bp_test$statistic, 5),
+															"P-Value" = round(bp_test$p.value, 5),
 															"Result" = ifelse(bp_test$p.value < alpha, "Reject", "Fail To Reject")
 															)
 									)
-		kable(t(test_results))
+		kable(t(test_results), col.names = c("Test Statistic", "P-Value", "Decision"))
 	}
 }
 ```
