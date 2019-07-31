@@ -229,231 +229,93 @@ housing_tst_data = housing_data[-housing_trn_idx, ]
 
 ### Using all Model Subsets
 
-As a starting point we want to get an idea which parameters are good ones to use in a potential model. 
-
-We can use `leaps` to tell us the "best" model, which is the one with the lowest Adjusted $R^2$ for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
+As a starting point we want to get an idea which parameters and their interactions are good ones to use in a potential model. To start this, we will create three initial models that will be fitted on our training data. The first model will be an additive model that utilizes all variables. The second model will be a two-way model that uses all variables as well as their two-way interactions. The third, and final, initial model will be a three-way model that uses all variables as well as their two and three-way interactions. We will create these models below.
 
 ```{r}
-regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2,
-               data = housing_trn_data,
-               nbest = 1,     # 1 best model for each number of predictors
-               nvmax = 10,    # NULL for no limit on number of variables
-               force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
+full_additive_model = lm(median_house_value ~ ., data = housing_trn_data)
+full_additive_adjr2 = summary(full_additive_model)$adj.r.squared
 
-fit_all_sum = summary(regsubsets.out)
+full_twoway_model = lm(median_house_value ~ (.)^2, data = housing_trn_data)
+full_twoway_adjr2 = summary(full_twoway_model)$adj.r.squared
 
-# Reference - R for Statistical Learning - David Dalpiaz
-# https://daviddalpiaz.github.io/r4sl/subset-selection.html
-par(mfrow = c(2, 2))
-plot(fit_all_sum$rss, xlab = "Number of Variables", ylab = "RSS", type = "b")
-
-plot(fit_all_sum$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "b")
-best_adj_r2 = which.max(fit_all_sum$adjr2)
-points(best_adj_r2, fit_all_sum$adjr2[best_adj_r2],
-       col = "red",cex = 2, pch = 20)
-text(fit_all_sum$adjr2, labels=rownames(fit_all_sum$adjr2),data=fit_all_sum, cex=0.9, font=2)
-
-plot(fit_all_sum$cp, xlab = "Number of Variables", ylab = "Cp", type = 'b')
-best_cp = which.min(fit_all_sum$cp)
-points(best_cp, fit_all_sum$cp[best_cp], 
-       col = "red", cex = 2, pch = 20)
-
-plot(fit_all_sum$bic, xlab = "Number of Variables", ylab = "BIC", type = 'b')
-best_bic = which.min(fit_all_sum$bic)
-points(best_bic, fit_all_sum$bic[best_bic], 
-       col = "red", cex = 2, pch = 20)
+full_threeway_model = lm(median_house_value ~ (.)^3, data = housing_trn_data)
+full_threeway_adjr2 = summary(full_threeway_model)$adj.r.squared
 ```
 
-The largest model works out to be the best model in all cases of RSS, Adjusted $R^2$, Cp, and BIC. It starts to flatten out after 10 predictors. We did the same leaps test with up to 20 predictors and received similar results as with 10, however the processing of the model creation and run took quite a bit longer, so we chose to stop at 10.
-
-From this information we will extract the top 3 models that represent the best model of all the models with 10 predictors, the best model of all the models with 9 predictors and the best model of all the models with 8 predictors.
-
-We will start with the best model of all the models with 10 predictors.
+In order to take a look at initial results of these models, we will be using model selection criterion $AIC$ and $Adj. R^2$. We will also include the total number of predictors in each model to get a feel of the total complexity of each.
 
 ```{r}
-coef(regsubsets.out, 10)
-```
-
-The first model to explore, `best_exhaustive_model_1`, uses the following predictors:
-
-- `longitude`
-- `latitude`
-- `I(ocean_proximity == \"INLAND\")TRUE`
-- `I(ocean_proximity == \"NEAR BAY\")TRUE`
-- `longitude:latitude`
-- `longitude:median_income`
-- `longitude:I(ocean_proximity == \"NEAR BAY\")TRUE`
-- `housing_median_age:total_rooms`
-- `housing_median_age:population`
-- `median_income:population`
-
-```{r}
-best_exhaustive_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
-summary(best_exhaustive_model_1)$"adj.r.squared"
-#names(coef(best_exhaustive_model_1))[-1]
-```
-
-This is an interesting set of predictors and they make a lot of sense. As we saw in the graph in the Dataset section titled `Data Map - Longtitude vs Latitude and Associated Variables`, it looks like housing prices are influenced by large metropolitan areas such as San Francisco and Los Angeles, where `longitude`, `latitude` and `ocean_proximity` would all play a large role.  Also, `median_income` may also be a proxy for the larger cities versus the more rural areas.
-
-The second model is explore, `best_exhaustive_model_2`, with 9 predictors.
-
-```{r}
-coef(regsubsets.out, 9)
-```
-
-The `best_exhaustive_model_2` uses the following predictors:
-
-- `housing_median_age`
-- `I(ocean_proximity == \"INLAND\")TRUE`
-- `I(ocean_proximity == \"NEAR BAY\")TRUE`
-- `housing_median_age:longitude`
-- `longitude:median_income`
-- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
-- `housing_median_age:total_rooms`
-- `housing_median_age:population`
-
-```{r}
-best_exhaustive_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-summary(best_exhaustive_model_2)$"adj.r.squared"
-#names(coef(best_exhaustive_model_2))[-1]
-```
-
-We see in this model, `housing_median_age` seems much more influential than in `best_exhaustive_model_1`.  The `ocean_proximity`, however, is still quite important here.
-
-The third model we'll explore is the one with 8 predictors.
-
-```{r}
-coef(regsubsets.out, 8)
-```
-
-The `best_exhaustive_model_3` uses the following predictors:
-
-- `median_income`
-- `I(ocean_proximity == \"INLAND\")TRUE`
-- `I(ocean_proximity == \"NEAR BAY\")TRUE`
-- `median_income:longitude`
-- `median_income:latitude`
-- `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
-- `housing_median_age:total_rooms`
-- `housing_median_age:population`
-
-```{r}
-best_exhaustive_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-summary(best_exhaustive_model_3)$"adj.r.squared"
-#names(coef(best_exhaustive_model_3))[-1]
-```
-
-
-
-This model is very similar to the `best_exhaustive_model_2`, except that `median_income` is more important here.
-
-We will also include a fourth model, `full_twoway_model`, which includes all variables in the model as well as their two-way interactions.
-
-```{r}
-full_twoway_model = twoway_mod_start = lm(median_house_value ~ (.)^2, data = housing_trn_data)
-twoway_adjr2 = summary(full_twoway_model)$adj.r.squared
-```
-
-This model has an adjusted $R^2$ of $`r twoway_adjr2`$. Comparing the adjusted $R^2$ of all four models, we can see that this full two-way interaction model scores the highest which gives us reason to believe this model may be the best performer. In order to test this, we will do some more model testing and building below starting with looking at AIC performance.
-
-We can now compare the AIC of these four models.
-
-```{r}
-aic_beginning_mods = data.frame(
-                                "Total Predictors" = c("Leaps Model 1" = extractAIC(best_exhaustive_model_1)[1],
-                                                       "Leaps Model 2" = extractAIC(best_exhaustive_model_2)[1],
-                                                       "Leaps Model 3" = extractAIC(best_exhaustive_model_3)[1],
-                                                       "Two-Way Int. Model" = extractAIC(full_twoway_model)[1]
+beginning_mods_results = data.frame(
+                                "Total Predictors" = c("Additive Model" = extractAIC(full_additive_model)[1],
+                                                       "Two-Way Int. Model" = extractAIC(full_twoway_model)[1],
+                                                       "Three-Way Int. Model" = extractAIC(full_threeway_model)[1]
                                                        ),
-                                "AIC" = c(
-                                          "Leaps Model 1" = extractAIC(best_exhaustive_model_1)[2],
-                                          "Leaps Model 2" = extractAIC(best_exhaustive_model_2)[2],
-                                          "Leaps Model 3" = extractAIC(best_exhaustive_model_3)[2],
-                                          "Two-Way Int. Model" = extractAIC(full_twoway_model)[2]
+                                "AIC" = c("Additive Model" = extractAIC(full_additive_model)[2],
+                                          "Two-Way Int. Model" = extractAIC(full_twoway_model)[2],
+                                          "Three-Way Int. Model" = extractAIC(full_threeway_model)[2]
+                                          
+                                          ),
+                                "Adj R-Squared" = c("Additive Model" = full_additive_adjr2,
+                                                     "Two-Way Int. Model" = full_twoway_adjr2,
+                                                     "Three-Way Int. Model" = full_threeway_adjr2
+                                                      
                                 )
                               )
-kable(aic_beginning_mods, align = c("c", "r"))
+kable(beginning_mods_results, align = c("c", "r"))
 ```
 
-We see that the model with the best (i.e., lowest) AIC is `full_twoway_model`, with a score of $`r extractAIC(full_twoway_model)[2]`$.  However, although this model has the lowest AIC, it also has far more predictors (and therefore is more complex) than the other three models - $`r extractAIC(full_twoway_model)[1]`$ compared to $`r extractAIC(best_exhaustive_model_1)[1]`$ predictors for `best_exhaustive_model_1`, $`r extractAIC(best_exhaustive_model_2)[1]`$ predictors for `best_exhaustive_model_2` and $`r extractAIC(best_exhaustive_model_3)[1]`$ predictors for `best_exhaustive_model_3`.  This is just something to keep in mind as we move forward.
+We see that the model with the best (i.e., lowest) AIC is `full_threeway_model`, with a score of $`r extractAIC(full_threeway_model)[2]`$.  However, although this model has the lowest AIC, it also has far more predictors (and therefore is more complex) than the other three models - $`r extractAIC(full_threeway_model)[1]`$ compared to $`r extractAIC(full_twoway_model)[1]`$ predictors for `full_twoway_model`, and $`r extractAIC(full_additive_model)[1]`$ predictors for `full_additive_model`. This is just something to keep in mind as we move forward, as model complexity should be taken into account.
 
 ### Using AIC and BIC
 
-All 4 of these models are good candidates for stepwise and backward AIC and BIC.
+All three of these models are good candidates for stepwise and backward AIC and BIC, however we will only be doing stepwise and backward search on the three-way models due to compute power needed as well as time it takes for the step function to search. Since this was our best model out of the inital three, we will leave it as-is and compare to our results from stepwise and backwards search on the additive and two-way models.
 
 ```{r}
-# full_twoway_model
-# AIC
+back_additive_mod_finish_aic = step(full_additive_model, direction = "backward", trace = 0)
+both_additive_mod_finish_aic = step(full_additive_model, direction = "both", trace = 0)
+
+n = length(resid(full_additive_model))
+back_additive_mod_finish_bic = step(full_additive_model, direction = "backward", k = log(n), trace = 0)
+both_additive_mod_finish_bic = step(full_additive_model, direction = "both", k = log(n), trace = 0)
+
 back_twoway_mod_finish_aic = step(full_twoway_model, direction = "backward", trace = 0)
 both_twoway_mod_finish_aic = step(full_twoway_model, direction = "both", trace = 0)
-# BIC
+
 n = length(resid(full_twoway_model))
 back_twoway_mod_finish_bic = step(full_twoway_model, direction = "backward", k = log(n), trace = 0)
 both_twoway_mod_finish_bic = step(full_twoway_model, direction = "both", k = log(n), trace = 0)
-
-# best_exhaustive_model_1
-# AIC
-back_aic_mod_1 = step(best_exhaustive_model_1, direction = "backward", trace = 0)
-both_aic_mod_1 = step(best_exhaustive_model_1, direction = "both", trace = 0)
-# BIC
-n = length(resid(best_exhaustive_model_1))
-back_bic_mod_1 = step(best_exhaustive_model_1, direction = "backward", k = log(n), trace = 0)
-both_bic_mod_1 = step(best_exhaustive_model_1, direction = "both", k = log(n), trace = 0)
-
-# best_exhaustive_model_2
-# AIC
-back_aic_mod_2 = step(best_exhaustive_model_2, direction = "backward", trace = 0)
-both_aic_mod_2 = step(best_exhaustive_model_2, direction = "both", trace = 0)
-# BIC
-n = length(resid(best_exhaustive_model_2))
-back_bic_mod_2 = step(best_exhaustive_model_2, direction = "backward", k = log(n), trace = 0)
-both_bic_mod_2 = step(best_exhaustive_model_2, direction = "both", k = log(n), trace = 0)
-
-# best_exhaustive_model_3
-# AIC
-back_aic_mod_3 = step(best_exhaustive_model_3, direction = "backward", trace = 0)
-both_aic_mod_3 = step(best_exhaustive_model_3, direction = "both", trace = 0)
-# BIC
-n = length(resid(best_exhaustive_model_3))
-back_bic_mod_3 = step(best_exhaustive_model_3, direction = "backward", k = log(n), trace = 0)
-both_bic_mod_3 = step(best_exhaustive_model_2, direction = "both", k = log(n), trace = 0)
 ```
 
 ```{r}
 aic_and_bic_results = data.frame(
   "AIC" =
     c("Backward" =
-        c("Two-Way" = extractAIC(back_twoway_mod_finish_aic)[2],
-          "Exhaustive M1" = extractAIC(back_aic_mod_1)[2],
-          "Exhaustive M2" = extractAIC(back_aic_mod_2)[2],
-          "Exhaustive M3" = extractAIC(back_aic_mod_3)[2]),
+        c("Additive" = extractAIC(back_additive_mod_finish_aic)[2],
+          "Two-Way" = extractAIC(back_twoway_mod_finish_aic)[2],
+          "Three-way" = extractAIC(full_threeway_model)[2]),
       "Both" =
-        c("Two-Way" = extractAIC(both_twoway_mod_finish_aic)[2],
-          "Exhaustive M1" = extractAIC(both_aic_mod_1)[2],
-          "Exhaustive M2" = extractAIC(both_aic_mod_2)[2],
-          "Exhaustive M3" = extractAIC(both_aic_mod_3)[2])),
+        c("Additive" = extractAIC(both_additive_mod_finish_aic)[2],
+          "Two-Way" = extractAIC(both_twoway_mod_finish_aic)[2],
+          "Three-way" = extractAIC(full_threeway_model)[2])),
   "BIC" =
     c("Backward" =
-        c("Two-Way" = extractAIC(back_twoway_mod_finish_bic)[2],
-          "Exhaustive M1" = extractAIC(back_bic_mod_1)[2],
-          "Exhaustive M2" = extractAIC(back_bic_mod_2)[2],
-          "Exhaustive M3" = extractAIC(back_bic_mod_3)[2]),
+        c("Additive" = extractAIC(back_additive_mod_finish_bic)[2],
+          "Two-Way" = extractAIC(back_twoway_mod_finish_bic)[2],
+          "Three-way" = extractAIC(full_threeway_model)[2]),
       "Both" =
-        c("Two-Way" = extractAIC(both_twoway_mod_finish_bic)[2],
-          "Exhaustive M1" = extractAIC(both_bic_mod_1)[2],
-          "Exhaustive M2" = extractAIC(both_bic_mod_2)[2],
-          "Exhaustive M3" = extractAIC(both_bic_mod_3)[2])))
+        c("Additive" = extractAIC(both_additive_mod_finish_bic)[2],
+          "Two-Way" = extractAIC(both_twoway_mod_finish_bic)[2],
+          "Three-way" = extractAIC(full_threeway_model)[2])))
 
 kable(aic_and_bic_results)
 ```
 
-The exhaustive models that we started with (`best_exhaustive_model_1`, `best_exhaustive_model_2`, and `best_exhaustive_model_3`) did not improve significantly.  Neither did `full_twoway_model` which started with a full two-way interaction. However the `back_twoway_mod_finish_aic` model did have slight improvement over `full_twoway_model`, which was originally the best performing model. 
+From the table above, we can see that the inital three-way model beats out all models selected from stepwise and backwards search using both AIC and BIC criterion. This leads us to believe this could possibly be our best model. However, we should note that the three-way model includes a large amount of variables which introduces a lot of complexity to the model.
 
+With complexity in mind, we will take a look at AIC of the other models. From now on, we will be using AIC as our main selection criterion. The model with the second lowest AIC is tied between models selected using backwards and stepwise direction of the two-way model. We believe that these models are the exact same. Using the `identical` function in R, we check if these models are identical which gives us the result `r identical(back_twoway_mod_finish_aic, both_twoway_mod_finish_aic)`. Since this results to `TRUE`, we will use `back_twoway_mod_finish_aic` as our best model from this chart.
 
-TODOs Jeanette:
-- Not choosing the ones coming out of the full twoway model - we can tie this maybe to the discussion of the first extractAIC and that this model is far more complex and therefore might not be ideal despite its lower AIC??
+We will now want to do diagnostics of some models we created to check the model assumptions of normality as well as heteroskedasticity, since we cannot solely rely on AIC for model selection and must take assumptions into account. These models will be `back_additive_mod_finish_aic`, `back_twoway_mod_finish_aic`, and `full_threeway_model`. These models were selected by having the lowest AIC in each class of initial models (`additive, two-way, and three-way`).
 
-We now have the four models `best_exhaustive_model_1`, `back_aic_mod_2` and `best_exhaustive_model_3` to test going forward. Let's check the assumptions on these three models.
 
 ```{r}
 diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue", plots = TRUE, tests = TRUE, pointtype = 16) {
@@ -509,10 +371,9 @@ diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue"
 
 
 ```{r}
+diagnostics(back_additive_mod_finish_aic)
 diagnostics(back_twoway_mod_finish_aic)
-diagnostics(best_exhaustive_model_1)
-diagnostics(back_aic_mod_2)
-diagnostics(best_exhaustive_model_3)
+diagnostics(full_threeway_model)
 ```
 
 For our diagnostics function we include a scatter plot of fitted values against residuals, a QQNorm plot, and histogram of the residuals in order to visualize our model and how our assumptions hold. For our tabular results, we are running two tests.
@@ -526,7 +387,7 @@ Looking at the plots, we are concerned that our models will not hold to our mode
 Recall that our best model is `back_twoway_mod_finish_aic`, which was the model found from a backward search on the full two-way model using AIC as criterion. In order to combat our rejection of the null hypothesis's above, we will attempt to transform the response variable, `median_home_value`, to hopefully get closer to our model assumptions.
 
 ```{r}
-back_twoway_mod_finish_aic_log = lm(formula = log(median_house_value) ~ longitude + latitude + housing_median_age +
+back_twoway_mod_finish_aic_log = lm(formula = log(median_house_value) ~ longitude + latitude + housing_median_age + 
     total_rooms + total_bedrooms + population + households + 
     median_income + ocean_proximity + longitude:latitude + longitude:housing_median_age + 
     longitude:total_rooms + longitude:total_bedrooms + longitude:households + 
@@ -546,10 +407,12 @@ back_twoway_mod_finish_aic_log = lm(formula = log(median_house_value) ~ longitud
 diagnostics(back_twoway_mod_finish_aic_log)
 ```
 
-Doing so, we can see that we are closer to normal distribution when taking the log of `median_house_value`. However, we are still rejecting both null hypothesis's. We will still consider this model to be best used for prediction rather than inference due to assumptions not holding.
+Doing so, we can see that we are closer to normal distribution when taking the log of `median_house_value`. However, we are still rejecting both null hypothesis's. Since this did not give us much improvement on our assumptions, we will stick to using the non-logged model and accept that our assumptions do not hold. While this will decrease the validity of our model, it can still be useful for prediction rather than inference. Since we are attempting to predict values of homes, we are okay with this.
 
 
 ## Detect Overfitting
+
+For our last model selection criterion, we will be utilizing Leave-One-Out
 
 ```{r}
 # From the text: http://daviddalpiaz.github.io/appliedstats/variable-selection-and-model-building.html
@@ -559,18 +422,33 @@ calc_loocv_rmse = function(model) {
 calc_rmse = function(actual, predicted) {
   sqrt(sum((actual - predicted)^2) / length(actual)) 
 }
+calc_avg_per_error = function(actual, predicted) {
+	inter_abs = abs(predicted - actual)
+	100 * (sum(inter_abs / actual)) / length(actual)
+}
 ```
 
-```{r}
-calc_loocv_rmse(back_twoway_mod_finish_aic)
-calc_loocv_rmse(best_exhaustive_model_1)
-calc_loocv_rmse(back_aic_mod_2)
-calc_loocv_rmse(best_exhaustive_model_3)
-```
+
+For our last model selection criterion, we will be utilizing Leave-One-Out Cross-Validation Roor Mean Square Error.
 
 Leave-One-Out Cross-Validation RMSE is the Root Mean Square Error, however for n number of iterations, where n is the total number of observations in our training set,  we drop one observation and calculate the errors in that iteration, and then take the average over all iterations to create the LOOCV-RMSE.
 
-The `back_twoway_mod_finish_aic` model has the lowest loocv_rmse. We believe this will be the best model due to having the lowest AIC as well as Leave-One-Out Cross-Validation RMSE. 
+```{r}
+additive_loocv_rmse = calc_loocv_rmse(back_additive_mod_finish_aic)
+twoway_loocv_rmse = calc_loocv_rmse(back_twoway_mod_finish_aic)
+threeway_loocv_rmse = calc_loocv_rmse(full_threeway_model)
+
+loocv_rmse_results = data.frame(
+                                "LOOCV-RMSE" = c(
+                                                 "Backwards Additive" = additive_loocv_rmse,
+                                                 "Backwards Two-Way" = twoway_loocv_rmse,
+                                                 "Initial Three-way" = threeway_loocv_rmse
+                                )
+                              )
+kable(loocv_rmse_results)
+```
+
+As we can see from the table above, the model created from backwards search of the two-way model using AIC as selection criterion obtains the lowest LOOCV-RMSE. Since we are using LOOCV-RMSE as our final model selection criterion, this gives us the final result that our Backwards Two-Way Search model, `back_twoway_mod_finish_aic`, is our best model. We will now evaluate this model on our test set that have had held back in order to see how this model performs on unseen data.
 
 
 # Results
@@ -578,32 +456,23 @@ The `back_twoway_mod_finish_aic` model has the lowest loocv_rmse. We believe thi
 
 ## Make predictions
 
-TODO: use the models from the diagnostics above
-TODO: make this a table that is more readable
-TODO: We should only be predicting on our best model. Let's discuss this.
-
 ```{r}
 # the actual median house values from the test set
-actual = housing_tst_data$median_house_value
+test_actual = housing_tst_data$median_house_value
 
-# predict using the best_exhaustive_model_1
-predicted = predict(best_exhaustive_model_1, newdata = housing_tst_data)
-(mod1_error = 100 * mean((abs(actual - predicted)) / actual))
+test_predictions = predict(back_twoway_mod_finish_aic, housing_tst_data)
 
-# predict using the best_exhaustive_model_3
-predicted = predict(best_exhaustive_model_3, newdata = housing_tst_data)
-(mod2_error = 100 * mean((abs(actual - predicted)) / actual))
+test_rmse = calc_rmse(test_actual, test_predictions)
 
-# predict using the back_aic_mod_2
-predicted = predict(back_aic_mod_2, newdata = housing_tst_data)
-(mod3_error = 100 * mean((abs(actual - predicted)) / actual))
-
-errors = sort(c(mod1_error, mod2_error, mod3_error))
+test_perc_error = calc_avg_per_error(test_actual, test_predictions)
 ```
 
-These three models have very similar percentages of error, ranging from $`r errors[1]`$% to $`r errors[3]`$%.
 
-Now that we have decided our best model to be `back_twoway_mod_finish_aic`, we will evaluate the model on our test set and find the Root-Mean-Square-Error.
+Evaluating our final model, which is the Backwards Two-Way Search model, on unseen test data using RMSE as well as average percent error we get the following results. We get an RMSE of `r test_rmse`, which compared to the LOOCV-RMSE we obtained on this model using our training data (`r twoway_loocv_rmse`), is similiar results. Since these RMSE's are close in value, we can see that our model is not overfitting. For average percent error, we get a result of `r test_perc_error`.
+
+In terms of context of our data, our model when evaluated on test data (unseen data) has an average error of $`r test_rmse`$. Meaning that on average, our model will predict that a home will have a price $\pm$ `r test_rmse` in comparison to the actual price. Looking at the average percent error, on average our model will predict that a home has a price that is $\pm$ `r test_perc_error` in regards to the actual price.
+
+Overall, for pricing of homes, we believe this is a good amount of error to have as there are a lot of things that are taken into thought when evaluating a homes value. <- maybe this will fit better in discussion.
 
 ```{r}
 predicted_best = predict(back_twoway_mod_finish_aic, housing_tst_data)
