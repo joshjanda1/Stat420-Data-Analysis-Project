@@ -515,9 +515,38 @@ diagnostics(back_aic_mod_2)
 diagnostics(best_exhaustive_model_3)
 ```
 
-TODO:
-- Discuss the output of the diagnostics plot. (not having heteroskedasticity we likely should not use for inference and only for prediction.)
-- TODO: try out log(y)/log response
+For our diagnostics function we include a scatter plot of fitted values against residuals, a QQNorm plot, and histogram of the residuals in order to visualize our model and how our assumptions hold. For our tabular results, we are running two tests.
+
+The first test is the Anderson-Darling Test, which tests our normality assumption. The null hypothesis for this test is that our data *is* sampled from a normal distribution.
+
+The second test is the Breusch-Pagan Test, which tests whether our model is homoskedastic (or, whether the residuals have a constant variance). The null hypothesis for this test is that our model *is* homoskedastic.
+
+Looking at the plots, we are concerned that our models will not hold to our model assumptions of normality and homoskedasticity. Looking further at our test results, we see that for each model we reject our null hypothesis's. With a rejection of our null hypothesis's, we have decided that these models would be best fit for prediction versus inference since assumptions do not hold.
+
+Recall that our best model is `back_twoway_mod_finish_aic`, which was the model found from a backward search on the full two-way model using AIC as criterion. In order to combat our rejection of the null hypothesis's above, we will attempt to transform the response variable, `median_home_value`, to hopefully get closer to our model assumptions.
+
+```{r}
+back_twoway_mod_finish_aic_log = lm(formula = log(median_house_value) ~ longitude + latitude + housing_median_age +
+    total_rooms + total_bedrooms + population + households + 
+    median_income + ocean_proximity + longitude:latitude + longitude:housing_median_age + 
+    longitude:total_rooms + longitude:total_bedrooms + longitude:households + 
+    longitude:median_income + longitude:ocean_proximity + latitude:housing_median_age + 
+    latitude:total_rooms + latitude:total_bedrooms + latitude:median_income + 
+    latitude:ocean_proximity + housing_median_age:total_rooms + 
+    housing_median_age:population + housing_median_age:households + 
+    housing_median_age:median_income + housing_median_age:ocean_proximity + 
+    total_rooms:population + total_rooms:households + total_rooms:median_income + 
+    total_rooms:ocean_proximity + total_bedrooms:households + 
+    total_bedrooms:median_income + total_bedrooms:ocean_proximity + 
+    population:households + population:median_income + population:ocean_proximity + 
+    households:median_income + households:ocean_proximity + median_income:ocean_proximity, 
+    data = housing_trn_data)
+```
+```{r}
+diagnostics(back_twoway_mod_finish_aic_log)
+```
+
+Doing so, we can see that we are closer to normal distribution when taking the log of `median_house_value`. However, we are still rejecting both null hypothesis's. We will still consider this model to be best used for prediction rather than inference due to assumptions not holding.
 
 
 ## Detect Overfitting
@@ -527,29 +556,31 @@ TODO:
 calc_loocv_rmse = function(model) {
   sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
 }
+calc_rmse = function(actual, predicted) {
+  sqrt(sum((actual - predicted)^2) / length(actual)) 
+}
 ```
-
-TODO: use the models from the diagnostics above
 
 ```{r}
+calc_loocv_rmse(back_twoway_mod_finish_aic)
 calc_loocv_rmse(best_exhaustive_model_1)
-calc_loocv_rmse(best_exhaustive_model_3)
 calc_loocv_rmse(back_aic_mod_2)
+calc_loocv_rmse(best_exhaustive_model_3)
 ```
 
-The `best_exhaustive_model_1` model has the lowest loocv_rmse.
+Leave-One-Out Cross-Validation RMSE is the Root Mean Square Error, however for n number of iterations, where n is the total number of observations in our training set,  we drop one observation and calculate the errors in that iteration, and then take the average over all iterations to create the LOOCV-RMSE.
 
-TODOs:
-- Explain what this means and why it matters.
-
+The `back_twoway_mod_finish_aic` model has the lowest loocv_rmse. We believe this will be the best model due to having the lowest AIC as well as Leave-One-Out Cross-Validation RMSE. 
 
 
 # Results
+
 
 ## Make predictions
 
 TODO: use the models from the diagnostics above
 TODO: make this a table that is more readable
+TODO: We should only be predicting on our best model. Let's discuss this.
 
 ```{r}
 # the actual median house values from the test set
@@ -571,6 +602,14 @@ errors = sort(c(mod1_error, mod2_error, mod3_error))
 ```
 
 These three models have very similar percentages of error, ranging from $`r errors[1]`$% to $`r errors[3]`$%.
+
+Now that we have decided our best model to be `back_twoway_mod_finish_aic`, we will evaluate the model on our test set and find the Root-Mean-Square-Error.
+
+```{r}
+predicted_best = predict(back_twoway_mod_finish_aic, housing_tst_data)
+calc_rmse(housing_tst_data$median_house_value, predicted_best)
+```
+
 
 # Discussion
 
