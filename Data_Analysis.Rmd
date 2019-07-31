@@ -233,15 +233,24 @@ As a starting point we want to get an idea which parameters are good ones to use
 
 We can use `leaps` to tell us the "best" model, which is the one with the lowest Adjusted $R^2$ for each number of parameters. Through testing we found this to select the full additive model when given the full additive as a starting point. It is more interesting when we use the full additive model with all two-way interactions.
 
-```{r}
+```{r cache= TRUE}
 regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2,
                data = housing_trn_data,
                nbest = 1,     # 1 best model for each number of predictors
                nvmax = 10,    # NULL for no limit on number of variables
                force.in = NULL, force.out = NULL, method = "exhaustive", really.big=T)
+```
 
+
+```{r}
 fit_all_sum = summary(regsubsets.out)
 
+par( mar=c(10, 4, 4, 0)) 
+plot(regsubsets.out,scale='adjr2')
+```
+
+
+```{r}
 # Reference - R for Statistical Learning - David Dalpiaz
 # https://daviddalpiaz.github.io/r4sl/subset-selection.html
 par(mfrow = c(2, 2))
@@ -251,7 +260,6 @@ plot(fit_all_sum$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", typ
 best_adj_r2 = which.max(fit_all_sum$adjr2)
 points(best_adj_r2, fit_all_sum$adjr2[best_adj_r2],
        col = "red",cex = 2, pch = 20)
-text(fit_all_sum$adjr2, labels=rownames(fit_all_sum$adjr2),data=fit_all_sum, cex=0.9, font=2)
 
 plot(fit_all_sum$cp, xlab = "Number of Variables", ylab = "Cp", type = 'b')
 best_cp = which.min(fit_all_sum$cp)
@@ -271,7 +279,7 @@ From this information we will extract the top 3 models that represent the best m
 We will start with the best model of all the models with 10 predictors.
 
 ```{r}
-coef(regsubsets.out, 10)
+coef(regsubsets.out, 11)
 ```
 
 The first model to explore, `best_exhaustive_model_1`, uses the following predictors:
@@ -293,12 +301,19 @@ summary(best_exhaustive_model_1)$"adj.r.squared"
 #names(coef(best_exhaustive_model_1))[-1]
 ```
 
+
+```{r}
+best_exhaustive_model_1_test = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "NEAR OCEAN") + longitude:housing_median_age + longitude:I(ocean_proximity == "INLAND") + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + latitude:housing_median_age + housing_median_age:population + housing_median_age:I(ocean_proximity == "INLAND") + population:median_income + median_income:I(ocean_proximity == "NEAR BAY"), data = housing_trn_data)
+summary(best_exhaustive_model_1_test)$"adj.r.squared"
+#names(coef(best_exhaustive_model_1))[-1]
+```
+
 This is an interesting set of predictors and they make a lot of sense. As we saw in the graph in the Dataset section titled `Data Map - Longtitude vs Latitude and Associated Variables`, it looks like housing prices are influenced by large metropolitan areas such as San Francisco and Los Angeles, where `longitude`, `latitude` and `ocean_proximity` would all play a large role.  Also, `median_income` may also be a proxy for the larger cities versus the more rural areas.
 
 The second model is explore, `best_exhaustive_model_2`, with 9 predictors.
 
 ```{r}
-coef(regsubsets.out, 9)
+coef(regsubsets.out, 10)
 ```
 
 The `best_exhaustive_model_2` uses the following predictors:
@@ -318,12 +333,18 @@ summary(best_exhaustive_model_2)$"adj.r.squared"
 #names(coef(best_exhaustive_model_2))[-1]
 ```
 
+```{r}
+best_exhaustive_model_2_test = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR OCEAN") + longitude:total_rooms + longitude:I(ocean_proximity == "INLAND") + latitude:housing_median_age + latitude:population + housing_median_age:population + housing_median_age:I(ocean_proximity == "INLAND") + housing_median_age:I(ocean_proximity == "NEAR BAY"), data = housing_trn_data)
+summary(best_exhaustive_model_2_test)$"adj.r.squared"
+#names(coef(best_exhaustive_model_2))[-1]
+```
+
 We see in this model, `housing_median_age` seems much more influential than in `best_exhaustive_model_1`.  The `ocean_proximity`, however, is still quite important here.
 
 The third model we'll explore is the one with 8 predictors.
 
 ```{r}
-coef(regsubsets.out, 8)
+coef(regsubsets.out, 9)
 ```
 
 The `best_exhaustive_model_3` uses the following predictors:
@@ -344,6 +365,11 @@ summary(best_exhaustive_model_3)$"adj.r.squared"
 ```
 
 
+```{r}
+best_exhaustive_model_3_test = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR OCEAN") + longitude:I(ocean_proximity == "INLAND") + latitude:housing_median_age + latitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:population + housing_median_age:I(ocean_proximity == "INLAND") + housing_median_age:I(ocean_proximity == "NEAR BAY"), data = housing_trn_data)
+summary(best_exhaustive_model_3_test)$"adj.r.squared"
+#names(coef(best_exhaustive_model_3))[-1]
+```
 
 This model is very similar to the `best_exhaustive_model_2`, except that `median_income` is more important here.
 
@@ -381,7 +407,7 @@ We see that the model with the best (i.e., lowest) AIC is `full_twoway_model`, w
 
 All 4 of these models are good candidates for stepwise and backward AIC and BIC.
 
-```{r}
+```{r cache=TRUE}
 # full_twoway_model
 # AIC
 back_twoway_mod_finish_aic = step(full_twoway_model, direction = "backward", trace = 0)
