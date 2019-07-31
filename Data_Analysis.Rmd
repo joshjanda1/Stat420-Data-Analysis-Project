@@ -242,6 +242,8 @@ regsubsets.out = regsubsets(median_house_value ~ (longitude + latitude + housing
 
 fit_all_sum = summary(regsubsets.out)
 
+# Reference - R for Statistical Learning - David Dalpiaz
+# https://daviddalpiaz.github.io/r4sl/subset-selection.html
 par(mfrow = c(2, 2))
 plot(fit_all_sum$rss, xlab = "Number of Variables", ylab = "RSS", type = "b")
 
@@ -249,6 +251,7 @@ plot(fit_all_sum$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", typ
 best_adj_r2 = which.max(fit_all_sum$adjr2)
 points(best_adj_r2, fit_all_sum$adjr2[best_adj_r2],
        col = "red",cex = 2, pch = 20)
+text(fit_all_sum$adjr2, labels=rownames(fit_all_sum$adjr2),data=fit_all_sum, cex=0.9, font=2)
 
 plot(fit_all_sum$cp, xlab = "Number of Variables", ylab = "Cp", type = 'b')
 best_cp = which.min(fit_all_sum$cp)
@@ -259,34 +262,16 @@ plot(fit_all_sum$bic, xlab = "Number of Variables", ylab = "BIC", type = 'b')
 best_bic = which.min(fit_all_sum$bic)
 points(best_bic, fit_all_sum$bic[best_bic], 
        col = "red", cex = 2, pch = 20)
-
-#summary(regsubsets.out)
-best_adjr2 = fit_all_sum$adjr2[which.max(fit_all_sum$adjr2)] #<- ?? we use this variable three times to give adj r2
-
-# Reference - R for Statistical Learning - David Dalpiaz
-# https://daviddalpiaz.github.io/r4sl/subset-selection.html
-
-
-coef(regsubsets.out, 7)
-coef(regsubsets.out, 10)
-
-fit_bwd = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2, data = housing_trn_data, nvmax = 10, method = "backward")
-fit_bwd_sum = summary(fit_bwd)
-
-fit_fwd = regsubsets(median_house_value ~ (longitude + latitude + housing_median_age + total_rooms + population + median_income + ocean_proximity) ^ 2, data = housing_trn_data, nvmax = 10, method = "forward")
-fit_fwd_sum = summary(fit_fwd)
-
-coef(fit_bwd, 10)
-coef(fit_fwd, 10)
-
 ```
 
-From this information we see that there are three models which have an Adjusted $R^2$ close to the maximum: $`r best_adjr2`$.  We'll use these three models as a starting point for model selection, as well as include a fourth model that we will introduce below.
+The largest model works out to be the best model in all cases of RSS, Adjusted $R^2$, Cp, and BIC. It starts to flatten out after 10 predictors. We did the same leaps test with up to 20 predictors and received similar results as with 10, however the processing of the model creation and run took quite a bit longer, so we chose to stop at 10.
+
+From this information we will extract the top 3 models that represent the best model of all the models with 10 predictors, the best model of all the models with 9 predictors and the best model of all the models with 8 predictors.
+
+We will start with the best model of all the models with 10 predictors.
 
 ```{r}
-best_exhaustive_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
-#summary(best_exhaustive_model_1)
-names(coef(best_exhaustive_model_1))[-1]
+coef(regsubsets.out, 10)
 ```
 
 The first model to explore, `best_exhaustive_model_1`, uses the following predictors:
@@ -302,14 +287,18 @@ The first model to explore, `best_exhaustive_model_1`, uses the following predic
 - `housing_median_age:population`
 - `median_income:population`
 
+```{r}
+best_exhaustive_model_1 = lm(median_house_value ~ longitude + latitude + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:latitude + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population + population:median_income, data = housing_trn_data)
+summary(best_exhaustive_model_1)$"adj.r.squared"
+#names(coef(best_exhaustive_model_1))[-1]
+```
+
 This is an interesting set of predictors and they make a lot of sense. As we saw in the graph in the Dataset section titled `Data Map - Longtitude vs Latitude and Associated Variables`, it looks like housing prices are influenced by large metropolitan areas such as San Francisco and Los Angeles, where `longitude`, `latitude` and `ocean_proximity` would all play a large role.  Also, `median_income` may also be a proxy for the larger cities versus the more rural areas.
 
-The second model is explore, `best_exhaustive_model_2`, has an Adjusted $R^2$ of $`r best_adjr2`$, which ties the Adjusted $R^2$ of `best_exhaustive_model_1`. To extract this model we are using the graph of the Adjusted $R^2$ to get the parameters from the second row from the top. There are similarities, but a couple differences here.
+The second model is explore, `best_exhaustive_model_2`, with 9 predictors.
 
 ```{r}
-best_exhaustive_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-#summary(best_exhaustive_model_2)
-names(coef(best_exhaustive_model_2))[-1]
+coef(regsubsets.out, 9)
 ```
 
 The `best_exhaustive_model_2` uses the following predictors:
@@ -323,14 +312,18 @@ The `best_exhaustive_model_2` uses the following predictors:
 - `housing_median_age:total_rooms`
 - `housing_median_age:population`
 
+```{r}
+best_exhaustive_model_2 = lm(median_house_value ~ housing_median_age + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:housing_median_age + longitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_exhaustive_model_2)$"adj.r.squared"
+#names(coef(best_exhaustive_model_2))[-1]
+```
+
 We see in this model, `housing_median_age` seems much more influential than in `best_exhaustive_model_1`.  The `ocean_proximity`, however, is still quite important here.
 
-The third model we'll explore, `best_exhaustive_model_3`, also scored an adjusted $R^2$ of $`r best_adjr2`$.
+The third model we'll explore is the one with 8 predictors.
 
 ```{r}
-best_exhaustive_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
-#summary(best_exhaustive_model_3)
-names(coef(best_exhaustive_model_3))[-1]
+coef(regsubsets.out, 8)
 ```
 
 The `best_exhaustive_model_3` uses the following predictors:
@@ -343,6 +336,14 @@ The `best_exhaustive_model_3` uses the following predictors:
 - `I(ocean_proximity == \"NEAR BAY\")TRUE:longitude`
 - `housing_median_age:total_rooms`
 - `housing_median_age:population`
+
+```{r}
+best_exhaustive_model_3 = lm(median_house_value ~ median_income + I(ocean_proximity == "INLAND") + I(ocean_proximity == "NEAR BAY") + longitude:median_income + latitude:median_income + longitude:I(ocean_proximity == "NEAR BAY") + housing_median_age:total_rooms + housing_median_age:population, data = housing_trn_data)
+summary(best_exhaustive_model_3)$"adj.r.squared"
+#names(coef(best_exhaustive_model_3))[-1]
+```
+
+
 
 This model is very similar to the `best_exhaustive_model_2`, except that `median_income` is more important here.
 
