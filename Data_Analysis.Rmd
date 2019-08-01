@@ -36,27 +36,31 @@ library(nortest)
 library(lmtest)
 ```
 
+```{r, echo = FALSE}
+# this makes the numbers more human readable
+# scipen controls when R kicks into scientific notation
+options(scipen = 1, digits = 2)
+```
+
 # Introduction
 
 ## Predicting Housing Prices
 
-The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about houses within a particular block.
+The purpose of this project is to predict the price of houses in California in 1990 based on a number of possible location-based predictors, including latitude, longitude, and information about other houses within a particular block.
 
-While this project focuses on prediction we are fully aware and want you the reader to also be aware that housing prices have increased dramatically since 1990, when the data was collected. This model should not be used to predict the actual future. This is a purely academic endeavor to explore statistical prediction.
+While this project focuses on prediction, we are fully aware that housing prices have increased dramatically since 1990, when the data was collected. This model should not be used to predict today's housing prices in California. This is purely an academic endeavor to explore statistical prediction.
 
 The goal of the project is to create the model that can best predict home prices in California given reasonable test/train splits in the data.
 
 ## California Housing Prices Dataset
 
-We're using the California Housing Prices dataset from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.  
-
-We loaded `housing.csv` into R.
+We're using the California Housing Prices dataset (`housing.csv`) from the following Kaggle site: https://www.kaggle.com/camnugent/california-housing-prices.  This data pertains to the houses found in a given California district and some summary stats about them based on the 1990 census data.
 
 ```{r}
 housing_data = read_csv("housing.csv")
 ```
 
-The dataset contains 20640 observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.  
+The dataset contains $`r nrow(housing_data)`$ observations and 10 attributes (9 predictors and 1 response).  Below is a list of the variables with descriptions taken from the original Kaggle site given above.
 
 - `longitude`: A measure of how far west a house is; a higher value is farther west
 - `latitude`: A measure of how far north a house is; a higher value is farther north
@@ -69,7 +73,7 @@ The dataset contains 20640 observations and 10 attributes (9 predictors and 1 re
 - `ocean_proximity`: Location of the house w.r.t ocean/sea
 - `median_house_value`: Median house value for households within a block (measured in US Dollars)
 
-This dataset meets all of the stated criteria for the project including:
+This dataset meets all of the stated criteria for this project including:
 
 * A minimum 200 observations
 * A numeric response variable: `median_house_value`
@@ -131,7 +135,7 @@ We looked at the total count of each level to get a better idea of the skew in `
 summary(housing_data$ocean_proximity)
 ```
 
-In fact, `ISLAND` only has five rows, where every other level has over 2,000 rows. Due to possible issues with fitting models, we decided to remove this level from `ocean_proximity`.  We accepted the risk that our model will less accurately predict the value of houses on islands.
+In fact, `ISLAND` only has five rows, where every other level has over 2,000 rows. Due to possible issues with model fitting, we decided to remove this level from `ocean_proximity`.  We accepted the risk that our model will less accurately predict the value of houses on islands.
 
 ```{r}
 housing_data = housing_data[housing_data$ocean_proximity != "ISLAND", ]
@@ -139,7 +143,7 @@ housing_data = housing_data[housing_data$ocean_proximity != "ISLAND", ]
 
 ### Missing Data
 
-The other thing to consider is missing data.
+The other thing we considered was missing data.
 
 ```{r}
 sum(is.na(housing_data))
@@ -192,13 +196,13 @@ hist(housing_data$median_income, breaks = 20, main = "median_income", border="da
 hist(housing_data$median_house_value, breaks = 20, main = "median_house_value", border="darkorange", col="dodgerblue")
 ```
 
-To better understand the relationship between the all the variables, we looked at the pairs.
+We also looked at the pairs to better understand the relationship between the all the variables.
 
 ```{r cache=TRUE}
 pairs(housing_data, col = "dodgerblue")
 ```
 
-It looks like there are some additional variables which may not be necessary due to collinearity.  We looked further into the correlations between the numeric variables and showed them in the table below: 
+It looks like there are some additional variables which may not be necessary due to collinearity.  We looked further into the correlations between the numeric variables and show them in the table below:
 
 ```{r}
 housing_data_nc = housing_data[, -10]
@@ -246,25 +250,23 @@ In order to take a look at initial results of these models, we will be using mod
 
 ```{r}
 beginning_mods_results = data.frame(
-                                "Total Predictors" = c("Additive Model" = extractAIC(full_additive_model)[1],
-                                                       "Two-Way Int. Model" = extractAIC(full_twoway_model)[1],
-                                                       "Three-Way Int. Model" = extractAIC(full_threeway_model)[1]
-                                                       ),
-                                "AIC" = c("Additive Model" = extractAIC(full_additive_model)[2],
-                                          "Two-Way Int. Model" = extractAIC(full_twoway_model)[2],
-                                          "Three-Way Int. Model" = extractAIC(full_threeway_model)[2]
-                                          
-                                          ),
-                                "Adj R-Squared" = c("Additive Model" = full_additive_adjr2,
-                                                     "Two-Way Int. Model" = full_twoway_adjr2,
-                                                     "Three-Way Int. Model" = full_threeway_adjr2
-                                                      
-                                )
-                              )
+  "Total Predictors" =
+    c("Additive Model" = extractAIC(full_additive_model)[1],
+      "Two-Way Int. Model" = extractAIC(full_twoway_model)[1],
+      "Three-Way Int. Model" = extractAIC(full_threeway_model)[1]),
+  "AIC" =
+    c("Additive Model" = extractAIC(full_additive_model)[2],
+      "Two-Way Int. Model" = extractAIC(full_twoway_model)[2],
+      "Three-Way Int. Model" = extractAIC(full_threeway_model)[2]),
+  "Adj R-Squared" =
+    c("Additive Model" = full_additive_adjr2,
+      "Two-Way Int. Model" = full_twoway_adjr2,
+      "Three-Way Int. Model" = full_threeway_adjr2))
+
 kable(beginning_mods_results, align = c("c", "r"))
 ```
 
-We see that the model with the best (i.e., lowest) AIC is `full_threeway_model`, with a score of $`r extractAIC(full_threeway_model)[2]`$.  However, although this model has the lowest AIC, it also has far more predictors (and therefore is more complex) than the other three models - $`r extractAIC(full_threeway_model)[1]`$ compared to $`r extractAIC(full_twoway_model)[1]`$ predictors for `full_twoway_model`, and $`r extractAIC(full_additive_model)[1]`$ predictors for `full_additive_model`. This is just something to keep in mind as we move forward, as model complexity should be taken into account.
+We see that the model with the best (i.e., lowest) AIC is `full_threeway_model`, with a score of $`r extractAIC(full_threeway_model)[2]`$.  However, although this model has the lowest AIC, it also has far more predictors (and therefore is more complex) than the other three models - $`r extractAIC(full_threeway_model)[1]`$ compared to $`r extractAIC(full_twoway_model)[1]`$ predictors for `full_twoway_model`, and $`r extractAIC(full_additive_model)[1]`$ predictors for `full_additive_model`. This is something to keep in mind as we move forward, as model complexity should be taken into account.
 
 ### Using AIC and BIC
 
@@ -355,20 +357,19 @@ diagnostics = function(model, alpha = .05, pointcol = "orange", linecol = "blue"
 		ad_test = ad.test(resid(model))
 		bp_test = bptest(model)
 		test_results = data.frame(
-									"Anderson-Darling Normality Test" = c("Test Statistic" = round(ad_test$statistic, 5),
-															"P-Value" = ad_test$p.value,
-															"Result" = ifelse(ad_test$p.value < alpha, "Reject", "Fail To Reject")
-															),
-									"Breusch-Pagan Test" = c("Test Statistic" = round(bp_test$statistic, 5),
-															"P-Value" = bp_test$p.value,
-															"Result" = ifelse(bp_test$p.value < alpha, "Reject", "Fail To Reject")
-															)
-									)
+		  "Anderson-Darling Normality Test" =
+		    c("Test Statistic" = round(ad_test$statistic, 5),
+		      "P-Value" = ad_test$p.value,
+		      "Result" = ifelse(ad_test$p.value < alpha, "Reject", "Fail To Reject")),
+		  "Breusch-Pagan Test" =
+		    c("Test Statistic" = round(bp_test$statistic, 5),
+		      "P-Value" = bp_test$p.value,
+		      "Result" = ifelse(bp_test$p.value < alpha, "Reject", "Fail To Reject")))
+
 		kable(t(test_results), col.names = c("Test Statistic", "P-Value", "Decision"))
 	}
 }
 ```
-
 
 ```{r}
 diagnostics(back_additive_mod_finish_aic)
@@ -378,11 +379,11 @@ diagnostics(full_threeway_model)
 
 For our diagnostics function we include a scatter plot of fitted values against residuals, a QQNorm plot, and histogram of the residuals in order to visualize our model and how our assumptions hold. For our tabular results, we are running two tests.
 
-The first test is the Anderson-Darling Test, which tests our normality assumption. The null hypothesis for this test is that our data *is* sampled from a normal distribution.
+The first test is the Anderson-Darling Test, which tests our normality assumption. The null hypothesis for this test is that our data *is* sampled from a normal distribution.  Note that we're using Anderson-Darling instead of Shapiro-Wilk because we are using a large dataset with $`r nrow(housing_data)`$ observations and Anderson-Darling performs better on larger datasets of this size.
 
 The second test is the Breusch-Pagan Test, which tests whether our model is homoskedastic (or, whether the residuals have a constant variance). The null hypothesis for this test is that our model *is* homoskedastic.
 
-Looking at the plots, we are concerned that our models will not hold to our model assumptions of normality and homoskedasticity. Looking further at our test results, we see that for each model we reject our null hypothesis's. With a rejection of our null hypothesis's, we have decided that these models would be best fit for prediction versus inference since assumptions do not hold.
+Looking at the plots, we are concerned that our models will not hold to our model assumptions of normality and homoskedasticity. Looking further at our test results, we see that for each model we reject our null hypothesis's. With a rejection of our null hypotheses, we have decided that these models would be best fit for prediction versus inference since assumptions do not hold.
 
 Recall that our best model is `back_twoway_mod_finish_aic`, which was the model found from a backward search on the full two-way model using AIC as criterion. In order to combat our rejection of the null hypothesis's above, we will attempt to transform the response variable, `median_home_value`, to hopefully get closer to our model assumptions.
 
@@ -407,12 +408,20 @@ back_twoway_mod_finish_aic_log = lm(formula = log(median_house_value) ~ longitud
 diagnostics(back_twoway_mod_finish_aic_log)
 ```
 
-Doing so, we can see that we are closer to normal distribution when taking the log of `median_house_value`. However, we are still rejecting both null hypothesis's. Since this did not give us much improvement on our assumptions, we will stick to using the non-logged model and accept that our assumptions do not hold. While this will decrease the validity of our model, it can still be useful for prediction rather than inference. Since we are attempting to predict values of homes, we are okay with this.
+Doing so, we can see that we are closer to normal distribution when taking the log of `median_house_value`. However, we are still rejecting both null hypotheses. Since this did not give us much improvement on our assumptions, we will stick to using the non-logged model and accept that our assumptions do not hold. While this will decrease the validity of our model, it can still be useful for prediction rather than inference. Since we are attempting to predict values of homes, we are okay with this.
 
 
 ## Detect Overfitting
 
-For our last model selection criterion, we will be utilizing Leave-One-Out
+For our last model selection criterion, we will be utilizing leave-one-out cross-validated RMSE (hereafter referred to as LOOCV RMSE).  This can be written as:
+
+$$
+\text{RMSE}_{\text{LOOCV}} = \sqrt{\frac{1}{n}\sum_{i=1}^n \left(\frac{e_{i}}{1-h_{i}}\right)^2}
+$$
+
+where $e_i$ are the residuals and $h_i$ are the leverages.
+
+LOOCV RMSE corrects for the fact that RMSE alone always prefers the larger model by instead assessing how the model fits "left out" data that wasn't used to perform the regression.
 
 ```{r}
 # From the text: http://daviddalpiaz.github.io/appliedstats/variable-selection-and-model-building.html
@@ -428,23 +437,17 @@ calc_avg_per_error = function(actual, predicted) {
 }
 ```
 
-
-For our last model selection criterion, we will be utilizing Leave-One-Out Cross-Validation Roor Mean Square Error.
-
-Leave-One-Out Cross-Validation RMSE is the Root Mean Square Error, however for n number of iterations, where n is the total number of observations in our training set,  we drop one observation and calculate the errors in that iteration, and then take the average over all iterations to create the LOOCV-RMSE.
-
 ```{r}
 additive_loocv_rmse = calc_loocv_rmse(back_additive_mod_finish_aic)
 twoway_loocv_rmse = calc_loocv_rmse(back_twoway_mod_finish_aic)
 threeway_loocv_rmse = calc_loocv_rmse(full_threeway_model)
 
 loocv_rmse_results = data.frame(
-                                "LOOCV-RMSE" = c(
-                                                 "Backwards Additive" = additive_loocv_rmse,
-                                                 "Backwards Two-Way" = twoway_loocv_rmse,
-                                                 "Initial Three-way" = threeway_loocv_rmse
-                                )
-                              )
+  "LOOCV-RMSE" =
+    c("Backwards Additive" = additive_loocv_rmse,
+      "Backwards Two-Way" = twoway_loocv_rmse,
+      "Initial Three-way" = threeway_loocv_rmse))
+
 kable(loocv_rmse_results)
 ```
 
@@ -453,32 +456,60 @@ As we can see from the table above, the model created from backwards search of t
 
 # Results
 
-
-## Make predictions
+## Predicting Housing Prices
 
 ```{r}
 # the actual median house values from the test set
 test_actual = housing_tst_data$median_house_value
-
+# the predicted house values for the test set
 test_predictions = predict(back_twoway_mod_finish_aic, housing_tst_data)
-
+# the RMSE
 test_rmse = calc_rmse(test_actual, test_predictions)
-
+# the percentage error
 test_perc_error = calc_avg_per_error(test_actual, test_predictions)
+
+test_rmse
+test_perc_error
 ```
 
-
-Evaluating our final model, which is the Backwards Two-Way Search model, on unseen test data using RMSE as well as average percent error we get the following results. We get an RMSE of `r test_rmse`, which compared to the LOOCV-RMSE we obtained on this model using our training data (`r twoway_loocv_rmse`), is similiar results. Since these RMSE's are close in value, we can see that our model is not overfitting. For average percent error, we get a result of `r test_perc_error`.
-
-In terms of context of our data, our model when evaluated on test data (unseen data) has an average error of $`r test_rmse`$. Meaning that on average, our model will predict that a home will have a price $\pm$ `r test_rmse` in comparison to the actual price. Looking at the average percent error, on average our model will predict that a home has a price that is $\pm$ `r test_perc_error` in regards to the actual price.
-
-Overall, for pricing of homes, we believe this is a good amount of error to have as there are a lot of things that are taken into thought when evaluating a homes value. <- maybe this will fit better in discussion.
-
-```{r}
-predicted_best = predict(back_twoway_mod_finish_aic, housing_tst_data)
-calc_rmse(housing_tst_data$median_house_value, predicted_best)
-```
-
+We evaluated our final model, the Backwards Two-Way Search model, on unseen test data using RMSE as well as average percent error.  We got an RMSE of $`r test_rmse`$, which compared to the LOOCV-RMSE we obtained on this model using our training data ($`r twoway_loocv_rmse`$), is a similiar result. Since these RMSEs are close in value, we can see that our model is not overfitting. For average percent error, we got a result of $`r test_perc_error`$%.
 
 # Discussion
+
+In terms of context of our data, our model when evaluated on test data (unseen data) has an average error of $`r test_rmse`$. Meaning that on average, our model will predict that a home will have a price $\pm$ $`r test_rmse`$ in comparison to the actual price. Looking at the average percent error, on average our model will predict that a home has a price that is $\pm$ $`r test_perc_error`$% in regards to the actual price.
+
+Overall, for pricing of homes, we believe this is a good amount of error to have as there are a lot of things that are taken into consideration when evaluating a home's value.
+
+TODOs:
+
+- moved these from the Results to the discussion - revisit them when I finish looking at the data.
+
+```{r}
+length(coef(back_twoway_mod_finish_aic))
+length(coef(full_twoway_model))
+names(coef(full_twoway_model))[which(!names(coef(full_twoway_model)) %in% names(coef(back_twoway_mod_finish_aic)))]
+```
+
+TODOs:
+
+- Maybe there's something interesting in looking at the predictors that the back AIC took out of the full_twoway_model - one of this in the total_rooms:total_bedrooms which we noticed was highly correlated in the Intro.
+
+
+```{r}
+op0 = par()
+op1 = op0$mar
+op1[2] = 7
+par(mar = op1)
+plot(abs(test_predictions - test_actual), housing_tst_data$ocean_proximity,
+     xlab = "Difference In Actual & Predicted House Prices",
+     ylab = "",
+     main = "Difference In Actual & Predicted House Prices vs Ocean Proximity",
+     col = "dodgerblue", yaxt = "none")
+axis(2, at = 1:5, labels = levels(housing_data$ocean_proximity), las = 1)
+```
+
+TODOs:
+
+- Tie this to the original comments we made in the Introduction - that we suspected that `ocean_proximity` would play a key role but that there are some issues with the INLAND places such as near Yosemite and Tahoe.  That there are some outliers for which we were really off.
+
 
