@@ -476,9 +476,11 @@ We evaluated our final model, the Backwards Two-Way Search model, on unseen test
 
 # Discussion
 
-Our final model, when evaluated on unseen test data, had an average error of $`r test_rmse`$, meaning that on average, our model will predict that a home will have a price $\pm$ $`r test_rmse`$ in comparison to the actual price.  This gives us an average percent error of $\pm$ $`r test_perc_error`$% difference between the actual and predicted prices.
+Our final model, when evaluated on unseen test data, had an average error of $`r test_rmse`$.  This means that, on average, our model's predicted housing price will be $\pm$ $`r test_rmse`$ in comparison to the actual price.  This gives us an average percent error of $\pm$ $`r test_perc_error`$% between the actual and predicted prices.
 
-While this is higher than we might have hoped for, we believe this error isn't too bad considering that the majority of the predictors were based on location.  As we noted in the Introduction, location - and more specifically `ocean_proximity` - does give us quite a lot of information about housing prices, but it can't tell the whole story.  We can see this in the range of the difference in actual and predicted prices for our model: 
+While this is higher than we might have hoped for, we believe this error isn't too bad considering that the majority of the predictors were based on location.  As we noted in the Introduction, while location - and more specifically `ocean_proximity` - gives us quite a lot of information about housing prices, but it doesn't tell the whole story.
+
+Below we show the range of our model's error by `ocean_proximity` (Note that there is not data for the $ISLAND$ level because we removed it from the dataset to avoid skew because of its low representation):
 
 ```{r}
 op0 = par()
@@ -486,17 +488,17 @@ op1 = op0$mar
 op1[2] = 7
 par(mar = op1)
 plot(test_predictions - test_actual, housing_tst_data$ocean_proximity,
-     xlab = "How Much Predicted Price Was Over / Under",
+     xlab = "Predicted Price Over / Under Actual Price",
      ylab = "",
-     main = "How Much Predicted Price Was Over / Under vs Ocean Proximity",
+     main = "Predicted Price Over / Under Actual Price vs Ocean Proximity",
      col = "dodgerblue", yaxt = "none")
 axis(2, at = 1:5, labels = levels(housing_tst_data$ocean_proximity), las = 1)
 
 ```
 
-For the most part, the range of the difference in actual and predicted prices is consistent for each of the `ocean_proximity` levels (remembering that we removed the $ISLAND$ level to avoid skew due to its low representation in the dataset).  In general, we tend to underestimate the price just a little bit more frequently than overestimating, but the range is rather stable.  There do seem to be some outliers, however, when the `ocean_proximity` is equal to $INLAND$.  In particular, our model has underestimated the price of two houses by more than $800,000.  This is quite a jump from the rest of the errors.
+A general trend worth noting is that we tend to underestimate the price a bit more frequently than overestimating.  Dividing the data by `ocean_proximity`, we see that for the most part, the range of the errors is consistent for each of the levels.  However, there are some extreme outliers when the `ocean_proximity` is $INLAND$.  In particular, our model has underestimated the price of two houses by more than \$800,000.  This is quite a jump from the rest of the errors and well beyond our average error of $`r test_rmse`$.
 
-In order to see if these data points line up with other potential issues we saw in the map in the Introduction, we plotted the difference between the predicted prices and the actual ones in the test data.  
+In order to see if these outlier data points align with the issues we saw in the Introduction, we plotted each of our model's errors in the test data.
 
 ```{r cache=TRUE}
 plot_map = ggplot(housing_tst_data, 
@@ -515,9 +517,9 @@ plot_map = ggplot(housing_tst_data,
 plot_map
 ```
 
-It looks like those two troublesome data points are indeed located in one of the inland areas with more expensive prices - namely, near the Sacramento area.  It's possible that removing these two values could have helped us more accurately estimate the prices of inland houses.
+Those two troublesome data points are indeed located in one of the inland areas with more expensive prices - namely, near the Sacramento area.  It's possible that removing these two values could have helped us more accurately estimate the prices of inland houses.
 
-Overall, our model did manage to predict the prices of houses in California in 1990 within a $\pm$ $`r test_perc_error`$% error rate based on the California Housing Prices dataset.
+Overall, our model was able to predict the prices of houses in California in 1990 within a $\pm$ $`r test_perc_error`$% error rate based on the California Housing Prices dataset.
 
 
 
