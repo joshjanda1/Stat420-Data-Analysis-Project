@@ -107,7 +107,7 @@ plot_map
 
 We see that on average the houses nearest to the ocean tend to have higher median house values, whereas those inland have the lower median values.  This difference is  quite substantial and tells us that the variable `ocean_proximity` will likely play a large role in predicting median house value.  
 
-It's worth noting that some ocean-adjacent locations, like the more isolated towns along California's northern most coast, have lower median house prices than other coastal housing, and some inland locations, like the towns near destinations such as Yosemite National Park and Lake Tahoe, do have higher median house prices than other inland housing.  Also interesting to note that the houses closest to large metropolitan areas such as San Francisco and Los Angeles have among the highest median house values, whereas the largely agricultural Central Valley has among the lowest.  This lets us know that we cannot rely on `ocean_proximity` alone to tell the whole story.
+It's worth noting that some ocean-adjacent locations, like the more isolated towns along California's northern most coast, have lower median house prices than other coastal housing, and some inland locations, like the towns near destinations such as Lake Tahoe or California's inland capital Sacramento, do have higher median house prices than other inland housing.  Also interesting to note that the houses closest to large metropolitan areas such as San Francisco and Los Angeles have among the highest median house values, whereas the largely agricultural Central Valley has among the lowest.  This lets us know that while `ocean_proximity` is very important, we may not be able to rely on it alone to tell the whole story.
 
 # Methods
 
@@ -472,44 +472,55 @@ test_rmse
 test_perc_error
 ```
 
-We evaluated our final model, the Backwards Two-Way Search model, on unseen test data using RMSE as well as average percent error.  We got an RMSE of $`r test_rmse`$, which compared to the LOOCV-RMSE we obtained on this model using our training data ($`r twoway_loocv_rmse`$), is a similiar result. Since these RMSEs are close in value, we can see that our model is not overfitting. For average percent error, we got a result of $`r test_perc_error`$%.
+We evaluated our final model, the Backwards Two-Way Search model, on unseen test data using RMSE as well as average percent error.  We got an RMSE of $`r test_rmse`$, which is similar to the LOOCV-RMSE we obtained on this model using our training data ($`r twoway_loocv_rmse`$). Since these RMSEs are close in value, we can see that our model is not overfitting. For average percent error, we got a result of $`r test_perc_error`$%.
 
 # Discussion
 
-In terms of context of our data, our model when evaluated on test data (unseen data) has an average error of $`r test_rmse`$. Meaning that on average, our model will predict that a home will have a price $\pm$ $`r test_rmse`$ in comparison to the actual price. Looking at the average percent error, on average our model will predict that a home has a price that is $\pm$ $`r test_perc_error`$% in regards to the actual price.
+Our final model, when evaluated on unseen test data, had an average error of $`r test_rmse`$, meaning that on average, our model will predict that a home will have a price $\pm$ $`r test_rmse`$ in comparison to the actual price.  This gives us an average percent error of $\pm$ $`r test_perc_error`$% difference between the actual and predicted prices.
 
-Overall, for pricing of homes, we believe this is a good amount of error to have as there are a lot of things that are taken into consideration when evaluating a home's value.
-
-TODOs:
-
-- moved these from the Results to the discussion - revisit them when I finish looking at the data.
-
-```{r}
-length(coef(back_twoway_mod_finish_aic))
-length(coef(full_twoway_model))
-names(coef(full_twoway_model))[which(!names(coef(full_twoway_model)) %in% names(coef(back_twoway_mod_finish_aic)))]
-```
-
-TODOs:
-
-- Maybe there's something interesting in looking at the predictors that the back AIC took out of the full_twoway_model - one of this in the total_rooms:total_bedrooms which we noticed was highly correlated in the Intro.
-
+While this is higher than we might have hoped for, we believe this error isn't too bad considering that the majority of the predictors were based on location.  As we noted in the Introduction, location - and more specifically `ocean_proximity` - does give us quite a lot of information about housing prices, but it can't tell the whole story.  We can see this in the range of the difference in actual and predicted prices for our model: 
 
 ```{r}
 op0 = par()
 op1 = op0$mar
 op1[2] = 7
 par(mar = op1)
-plot(abs(test_predictions - test_actual), housing_tst_data$ocean_proximity,
-     xlab = "Difference In Actual & Predicted House Prices",
+plot(test_predictions - test_actual, housing_tst_data$ocean_proximity,
+     xlab = "How Much Predicted Price Was Over / Under",
      ylab = "",
-     main = "Difference In Actual & Predicted House Prices vs Ocean Proximity",
+     main = "How Much Predicted Price Was Over / Under vs Ocean Proximity",
      col = "dodgerblue", yaxt = "none")
-axis(2, at = 1:5, labels = levels(housing_data$ocean_proximity), las = 1)
+axis(2, at = 1:5, labels = levels(housing_tst_data$ocean_proximity), las = 1)
+
 ```
 
-TODOs:
+For the most part, the range of the difference in actual and predicted prices is consistent for each of the `ocean_proximity` levels (remembering that we removed the $ISLAND$ level to avoid skew due to its low representation in the dataset).  In general, we tend to underestimate the price just a little bit more frequently than overestimating, but the range is rather stable.  There do seem to be some outliers, however, when the `ocean_proximity` is equal to $INLAND$.  In particular, our model has underestimated the price of two houses by more than $800,000.  This is quite a jump from the rest of the errors.
 
-- Tie this to the original comments we made in the Introduction - that we suspected that `ocean_proximity` would play a key role but that there are some issues with the INLAND places such as near Yosemite and Tahoe.  That there are some outliers for which we were really off.
+In order to see if these data points line up with other potential issues we saw in the map in the Introduction, we plotted the difference between the predicted prices and the actual ones in the test data.  
+
+```{r cache=TRUE}
+plot_map = ggplot(housing_tst_data, 
+                  aes(x = longitude, y = latitude, 
+                      color = test_predictions - test_actual, 
+                      hma = housing_median_age, tr = total_rooms, tb = total_bedrooms,
+                      hh = households, mi = median_income)) +
+              geom_point(aes(size = abs(test_predictions - test_actual)), alpha = 0.4) +
+              xlab("Longitude") +
+              ylab("Latitude") +
+              ggtitle("Predicted Price Over / Under Actual Price") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              scale_color_distiller(palette = "Paired", labels = comma) +
+              labs(color = "Predicted Price Over / Under (in $USD)", 
+                   size = "Magnitude of Price Difference")
+plot_map
+```
+
+It looks like those two troublesome data points are indeed located in one of the inland areas with more expensive prices - namely, near the Sacramento area.  It's possible that removing these two values could have helped us more accurately estimate the prices of inland houses.
+
+Overall, our model did manage to predict the prices of houses in California in 1990 within a $\pm$ $`r test_perc_error`$% error rate based on the California Housing Prices dataset.
+
+
+
+
 
 
